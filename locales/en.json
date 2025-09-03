@@ -1,0 +1,90 @@
+{
+  "app": {
+    "name": "FAB - Firewall Access Bot",
+    "description": "Firewall Access Management System",
+    "copyright": "© <a href=\"https://mooqle.com\" target=\"_blank\" class=\"text-decoration-none\">mooqle.com</a>"
+  },
+  "bot": {
+    "welcome": "👋 Welcome to FAB - Firewall Access Bot!\n\n🔒 This bot helps you manage firewall access.\n\nWhat would you like to do?",
+    "main_menu": "🏠 Main Menu",
+    "add_access": "🔓 Add Access",
+    "my_accesses": "📋 My Accesses", 
+    "help": "❓ Help",
+    "access_link_created": "✅ Access link created!\n\n🔗 Click the link to configure access:\n{link}\n\n⏱ Link expires in 1 hour.",
+    "no_active_accesses": "📝 No active accesses found.\n\nYou don't have any open firewall accesses at the moment.",
+    "active_accesses_title": "🟢 Your active accesses:",
+    "access_opened": "Access opened for {hours}",
+    "access_closed": "✅ Access successfully closed!\n\nIP: {ip}\nDuration: {created} - {closed}",
+    "access_not_found": "❌ Access not found or already closed.",
+    "error": "❌ An error occurred: {error}",
+    "close_access": "🔴 Close access #{number}",
+    "unauthorized": "🚫 Access denied!\n\nYour user ID ({user_id}) is not authorized to use this bot.\n\nPlease contact the administrator to request access.",
+    "manage_users": "👥 Manage Users",
+    "admin_menu": "👥 **User Management**\n\nAs an administrator, you can manage the whitelist of authorized users.",
+    "add_user": "➕ Add User",
+    "list_users": "📋 List Users",
+    "back": "⬅️ Back",
+    "add_user_prompt": "📝 **Add User to Whitelist**\n\nSend me the Telegram user ID of the person you want to authorize.\n\nYou can get their ID by asking them to send /start to @userinfobot",
+    "no_users_in_whitelist": "📝 No users in whitelist yet.\n\nAdd users to allow them to use the bot.",
+    "whitelist_users_title": "📋 **Authorized Users**",
+    "username": "Username",
+    "name": "Name",
+    "added": "Added",
+    "remove_user": "🗑 Remove #{number}",
+    "user_removed": "✅ User {user_id} has been removed from whitelist.",
+    "user_not_found": "❌ User not found in whitelist.",
+    "user_added_to_whitelist": "✅ User {user_id} has been added to whitelist.",
+    "error_adding_user": "❌ Error adding user to whitelist.",
+    "use_commands": "🤖 Use commands or buttons to interact with the bot.\nSend /start to open the main menu.",
+    "help_text": "🔒 **FAB - Firewall Access Bot Help**\n\n**Available commands:**\n• Add Access - Create a new access link\n• My Accesses - View and manage active accesses\n• Help - Show this help message\n\n**How it works:**\n1. Click 'Add Access' to generate a link\n2. Open the link to configure access duration\n3. Monitor and close accesses when needed\n\n**Need support?** Contact the administrator."
+  },
+  "web": {
+    "page_title": "Access Management - FAB",
+    "session_info": "Session Information",
+    "ip_address": "IP Address",
+    "user_id": "User ID",
+    "access_control": "Access Control",
+    "access_time": "Access Time",
+    "open_access": "Open Access",
+    "close_access": "Close",
+    "active_accesses": "Active Accesses",
+    "created": "Created",
+    "expires": "Expires",
+    "loading": "Loading...",
+    "unknown": "Unknown",
+    "access_opened_for": "Access opened for {hours}",
+    "access_expired": "Access expired",
+    "access_closed": "Access closed",
+    "durations": {
+      "1_hour": "1 hour",
+      "3_hours": "3 hours", 
+      "8_hours": "8 hours",
+      "12_hours": "12 hours"
+    },
+    "messages": {
+      "select_duration": "Please select access duration",
+      "access_success": "✅ Access successfully opened for {duration}!",
+      "access_closed_success": "✅ Access successfully closed!",
+      "confirm_close": "Are you sure you want to close access?",
+      "error": "❌ Error: {error}",
+      "general_error": "❌ An error occurred: {error}"
+    }
+  },
+  "time": {
+    "remaining": "remaining",
+    "expired": "expired",
+    "less_than_second": "less than a second",
+    "hours": {
+      "1": "{count} hour",
+      "other": "{count} hours"
+    },
+    "minutes": {
+      "1": "{count} min",
+      "other": "{count} min"
+    },
+    "seconds": {
+      "1": "{count} sec", 
+      "other": "{count} sec"
+    }
+  }
+}
