@@ -39,6 +39,7 @@ A Telegram bot for managing firewall access with web interface and RabbitMQ inte
 4. **RabbitMQ Integration** (Optional)
    - JSON message generation for access events
    - Can be enabled/disabled via `RABBITMQ_ENABLED` environment variable
+   - When disabled, all RabbitMQ configuration variables are ignored
    - All access events are always logged to stdout
    - Message contains:
      - Access status (open/closed)
@@ -162,6 +163,9 @@ RABBITMQ_PORT=5672
 RABBITMQ_USERNAME=guest
 RABBITMQ_PASSWORD=guest
 RABBITMQ_QUEUE=firewall_access
+RABBITMQ_VHOST=/
+RABBITMQ_EXCHANGE=
+RABBITMQ_ROUTING_KEY=firewall.access
 ```
 
 ### Environment Variables
@@ -179,12 +183,14 @@ RABBITMQ_QUEUE=firewall_access
 | `NGINX_ENABLED` | Enable nginx proxy mode for IP detection | `false` | ❌ |
 | `LOG_LEVEL` | Logging level (DEBUG/INFO/WARNING/ERROR) | `INFO` | ❌ |
 | `RABBITMQ_ENABLED` | Enable RabbitMQ message publishing | `false` | ❌ |
-| `RABBITMQ_HOST` | RabbitMQ server hostname | `localhost` | ❌ |
-| `RABBITMQ_PORT` | RabbitMQ server port | `5672` | ❌ |
-| `RABBITMQ_USERNAME` | RabbitMQ username | `guest` | ❌ |
-| `RABBITMQ_PASSWORD` | RabbitMQ password | `guest` | ❌ |
-| `RABBITMQ_QUEUE` | RabbitMQ queue name | `firewall_access` | ❌ |
-| `RABBITMQ_VHOST` | RabbitMQ virtual host | `/` | ❌ |
+| `RABBITMQ_HOST` | RabbitMQ server hostname | `localhost` | Only if enabled |
+| `RABBITMQ_PORT` | RabbitMQ server port | `5672` | Only if enabled |
+| `RABBITMQ_USERNAME` | RabbitMQ username | `guest` | Only if enabled |
+| `RABBITMQ_PASSWORD` | RabbitMQ password | `guest` | Only if enabled |
+| `RABBITMQ_QUEUE` | RabbitMQ queue name | `firewall_access` | Only if enabled |
+| `RABBITMQ_VHOST` | RabbitMQ virtual host (must start with `/`) | `/` | Only if enabled |
+| `RABBITMQ_EXCHANGE` | RabbitMQ exchange name (empty = default) | `` | Only if enabled |
+| `RABBITMQ_ROUTING_KEY` | RabbitMQ routing key | `firewall.access` | Only if enabled |
 
 ## Usage
 

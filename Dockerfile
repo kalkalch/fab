@@ -17,7 +17,10 @@ RUN apt-get update && apt-get install -y \
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Configure DNS for pip install (backup solution if daemon.json not configured)
+RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
+    echo "nameserver 8.8.4.4" >> /etc/resolv.conf && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .

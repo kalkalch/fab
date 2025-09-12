@@ -52,12 +52,35 @@ class Config:
         
         # RabbitMQ Configuration
         self.rabbitmq_enabled: bool = os.getenv("RABBITMQ_ENABLED", "false").lower() in ("true", "1", "yes")
-        self.rabbitmq_host: str = os.getenv("RABBITMQ_HOST", "localhost")
-        self.rabbitmq_port: int = int(os.getenv("RABBITMQ_PORT", "5672"))
-        self.rabbitmq_username: str = os.getenv("RABBITMQ_USERNAME", "guest")
-        self.rabbitmq_password: str = os.getenv("RABBITMQ_PASSWORD", "guest")
-        self.rabbitmq_queue: str = os.getenv("RABBITMQ_QUEUE", "firewall_access")
-        self.rabbitmq_vhost: str = os.getenv("RABBITMQ_VHOST", "/")
+        
+        # Only load RabbitMQ settings if enabled
+        if self.rabbitmq_enabled:
+            self.rabbitmq_host: str = self._get_required_env("RABBITMQ_HOST")
+            self.rabbitmq_port: int = int(os.getenv("RABBITMQ_PORT", "5672"))
+            self.rabbitmq_username: str = os.getenv("RABBITMQ_USERNAME", "guest")
+            self.rabbitmq_password: str = os.getenv("RABBITMQ_PASSWORD", "guest")
+            self.rabbitmq_queue: str = os.getenv("RABBITMQ_QUEUE", "firewall_access")
+            # Handle RABBITMQ_VHOST: if not set, default to "/"
+            vhost = os.getenv("RABBITMQ_VHOST")
+            if not vhost:
+                vhost = "/"
+            else:
+                # Ensure vhost starts with / (RabbitMQ requirement)
+                if not vhost.startswith("/"):
+                    vhost = "/" + vhost
+            self.rabbitmq_vhost: str = vhost
+            self.rabbitmq_exchange: str = os.getenv("RABBITMQ_EXCHANGE", "")
+            self.rabbitmq_routing_key: str = os.getenv("RABBITMQ_ROUTING_KEY", "firewall.access")
+        else:
+            # Set defaults when disabled (won't be used, but safe values)
+            self.rabbitmq_host: str = ""
+            self.rabbitmq_port: int = 5672
+            self.rabbitmq_username: str = ""
+            self.rabbitmq_password: str = ""
+            self.rabbitmq_queue: str = ""
+            self.rabbitmq_vhost: str = "/"  # Keep valid default even when disabled
+            self.rabbitmq_exchange: str = ""
+            self.rabbitmq_routing_key: str = ""
         
         # Security Configuration
         self.secret_key: str = os.getenv("SECRET_KEY", self._generate_secret_key())
@@ -101,6 +124,9 @@ class Config:
     @property
     def rabbitmq_url(self) -> str:
         """Get RabbitMQ connection URL."""
+        if not self.rabbitmq_enabled:
+            return ""
+        
         return (
             f"amqp://{self.rabbitmq_username}:{self.rabbitmq_password}"
             f"@{self.rabbitmq_host}:{self.rabbitmq_port}{self.rabbitmq_vhost}"

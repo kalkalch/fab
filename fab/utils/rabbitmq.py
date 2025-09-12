@@ -52,13 +52,32 @@ class RabbitMQPublisher:
             self._connection = BlockingConnection(parameters)
             self._channel = self._connection.channel()
             
+            # Declare exchange if specified (create if doesn't exist)
+            if config.rabbitmq_exchange:
+                self._channel.exchange_declare(
+                    exchange=config.rabbitmq_exchange,
+                    exchange_type="direct",
+                    durable=True
+                )
+            
             # Declare queue (create if doesn't exist)
             self._channel.queue_declare(
                 queue=config.rabbitmq_queue,
                 durable=True
             )
             
-            logger.info(f"Connected to RabbitMQ at {config.rabbitmq_host}:{config.rabbitmq_port}")
+            # Bind queue to exchange if both are specified
+            if config.rabbitmq_exchange and config.rabbitmq_routing_key:
+                self._channel.queue_bind(
+                    exchange=config.rabbitmq_exchange,
+                    queue=config.rabbitmq_queue,
+                    routing_key=config.rabbitmq_routing_key
+                )
+            
+            logger.info(f"Connected to RabbitMQ at {config.rabbitmq_host}:{config.rabbitmq_port}{config.rabbitmq_vhost}")
+            logger.debug(f"Using queue: {config.rabbitmq_queue}")
+            if config.rabbitmq_exchange:
+                logger.debug(f"Using exchange: {config.rabbitmq_exchange}")
             return True
             
         except AMQPConnectionError as e:
@@ -95,9 +114,13 @@ class RabbitMQPublisher:
                 return False
         
         try:
+            # Use configured exchange and routing key
+            exchange = config.rabbitmq_exchange
+            routing_key = config.rabbitmq_routing_key or config.rabbitmq_queue
+            
             self._channel.basic_publish(
-                exchange="",
-                routing_key=config.rabbitmq_queue,
+                exchange=exchange,
+                routing_key=routing_key,
                 body=message,
                 properties=pika.BasicProperties(
                     delivery_mode=2,  # Make message persistent
@@ -105,7 +128,10 @@ class RabbitMQPublisher:
                 )
             )
             
-            logger.info(f"Published message to queue {config.rabbitmq_queue}")
+            if exchange:
+                logger.info(f"Published message to exchange '{exchange}' with routing key '{routing_key}'")
+            else:
+                logger.info(f"Published message to queue '{routing_key}' (default exchange)")
             logger.debug(f"Message content: {message}")
             return True
             

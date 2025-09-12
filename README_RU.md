@@ -39,6 +39,7 @@ Telegram-бот для управления доступом к файрволу
 4. **Интеграция с RabbitMQ** (Опциональная)
    - Генерация JSON-сообщений для событий доступа
    - Может быть включена/выключена через переменную `RABBITMQ_ENABLED`
+   - При отключении все переменные конфигурации RabbitMQ игнорируются
    - Все события доступа всегда логируются в stdout
    - Сообщение содержит:
      - Статус доступа (открыт/закрыт)
@@ -162,6 +163,9 @@ RABBITMQ_PORT=5672
 RABBITMQ_USERNAME=guest
 RABBITMQ_PASSWORD=guest
 RABBITMQ_QUEUE=firewall_access
+RABBITMQ_VHOST=/
+RABBITMQ_EXCHANGE=
+RABBITMQ_ROUTING_KEY=firewall.access
 ```
 
 ### Переменные окружения
@@ -179,12 +183,14 @@ RABBITMQ_QUEUE=firewall_access
 | `NGINX_ENABLED` | Режим nginx прокси для определения IP | `false` | ❌ |
 | `LOG_LEVEL` | Уровень логирования (DEBUG/INFO/WARNING/ERROR) | `INFO` | ❌ |
 | `RABBITMQ_ENABLED` | Включить публикацию сообщений в RabbitMQ | `false` | ❌ |
-| `RABBITMQ_HOST` | Хост сервера RabbitMQ | `localhost` | ❌ |
-| `RABBITMQ_PORT` | Порт сервера RabbitMQ | `5672` | ❌ |
-| `RABBITMQ_USERNAME` | Имя пользователя RabbitMQ | `guest` | ❌ |
-| `RABBITMQ_PASSWORD` | Пароль RabbitMQ | `guest` | ❌ |
-| `RABBITMQ_QUEUE` | Имя очереди RabbitMQ | `firewall_access` | ❌ |
-| `RABBITMQ_VHOST` | Виртуальный хост RabbitMQ | `/` | ❌ |
+| `RABBITMQ_HOST` | Хост сервера RabbitMQ | `localhost` | Только если включен |
+| `RABBITMQ_PORT` | Порт сервера RabbitMQ | `5672` | Только если включен |
+| `RABBITMQ_USERNAME` | Имя пользователя RabbitMQ | `guest` | Только если включен |
+| `RABBITMQ_PASSWORD` | Пароль RabbitMQ | `guest` | Только если включен |
+| `RABBITMQ_QUEUE` | Имя очереди RabbitMQ | `firewall_access` | Только если включен |
+| `RABBITMQ_VHOST` | Виртуальный хост RabbitMQ (должен начинаться с `/`) | `/` | Только если включен |
+| `RABBITMQ_EXCHANGE` | Имя обменника RabbitMQ (пустое = default) | `` | Только если включен |
+| `RABBITMQ_ROUTING_KEY` | Ключ маршрутизации RabbitMQ | `firewall.access` | Только если включен |
 
 ## Использование
 
