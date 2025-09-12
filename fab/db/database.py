@@ -9,7 +9,7 @@ import logging
 import threading
 from pathlib import Path
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Any, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -148,7 +148,7 @@ class Database:
         """Remove expired sessions and return count of removed sessions."""
         cursor = self.execute(
             "DELETE FROM user_sessions WHERE expires_at < ?",
-            (datetime.now(),)
+            (datetime.now(timezone.utc),)
         )
         count = cursor.rowcount
         if count > 0:
@@ -161,7 +161,7 @@ class Database:
             """UPDATE access_requests 
                SET status = 'closed', closed_at = CURRENT_TIMESTAMP 
                WHERE status = 'open' AND expires_at < ?""",
-            (datetime.now(),)
+            (datetime.now(timezone.utc),)
         )
         count = cursor.rowcount
         if count > 0:
@@ -177,7 +177,7 @@ class Database:
         stats['whitelist_users'] = row['total']
         
         # Session statistics  
-        row = self.fetchone("SELECT COUNT(*) as total FROM user_sessions WHERE expires_at > ?", (datetime.now(),))
+        row = self.fetchone("SELECT COUNT(*) as total FROM user_sessions WHERE expires_at > ?", (datetime.now(timezone.utc),))
         stats['active_sessions'] = row['total']
         
         # Access request statistics

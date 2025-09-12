@@ -9,6 +9,7 @@ import logging
 import time
 import re
 import uuid
+import ipaddress
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for
 from werkzeug.serving import make_server
 import threading
@@ -103,17 +104,26 @@ def _validate_json_data(data: any) -> dict | None:
 
 def _validate_ip_headers(request) -> bool:
     """Validate IP-related headers for tampering attempts."""
-    dangerous_headers = [
-        'x-cluster-client-ip', 'x-forwarded', 'forwarded-for', 
-        'x-forwarded-host', 'x-forwarded-server', 'x-forwarded-proto-version',
-        'x-real-port', 'x-forwarded-ssl', 'x-forwarded-scheme'
+    # Headers that are always suspicious
+    always_dangerous = [
+        'x-cluster-client-ip', 'x-forwarded', 'forwarded-for',
+        'x-forwarded-proto-version', 'x-real-port'
+    ]
+    
+    # Headers that are legitimate when NGINX_ENABLED=true, suspicious otherwise
+    nginx_headers = [
+        'x-forwarded-host', 'x-forwarded-server', 'x-forwarded-ssl', 
+        'x-forwarded-scheme', 'x-forwarded-proto'
     ]
     
     # Check for suspicious IP-related headers
     for header_name in request.headers.keys():
         header_lower = header_name.lower()
-        if header_lower in dangerous_headers:
+        
+        if header_lower in always_dangerous:
             logger.warning(f"Suspicious IP header detected: {header_name}")
+        elif header_lower in nginx_headers and not config.nginx_enabled:
+            logger.warning(f"Unexpected proxy header (nginx disabled): {header_name}")
             
         # Check for multiple X-Forwarded-For or X-Real-IP headers (header injection)
         if header_lower in ['x-forwarded-for', 'x-real-ip']:
@@ -192,9 +202,9 @@ def create_app() -> Flask:
             language = get_web_user_language()
             i18n.set_language(language)
             
-            # Update session with IP if not set
+            # Set IP for session tracking (but don't mark as used yet)
             if not session.ip_address:
-                session.use(client_ip)
+                session.set_ip(client_ip)
             
             # Get active requests for this user
             active_requests = access_manager.get_active_requests_for_user(session.telegram_user_id)
@@ -253,8 +263,17 @@ def create_app() -> Flask:
                 _wait_for_uniform_response(start_time, 0.3)
                 return "OK", 200
             
-            # Mark session as used
-            session.use(client_ip)
+            # Check if session was already used (prevent reuse)
+            if session.used:
+                logger.warning(f"Attempt to reuse already used session {token[:8]}... from IP {client_ip}")
+                _wait_for_uniform_response(start_time, 0.3)
+                return "OK", 200
+            
+            # Mark session as used atomically
+            if not session.use_atomic(client_ip):
+                logger.warning(f"Failed to use session {token[:8]}... - already used by another request")
+                _wait_for_uniform_response(start_time, 0.3)
+                return "OK", 200
             
             # Create access request
             access_request = access_manager.create_access_request(
@@ -395,25 +414,52 @@ def create_app() -> Flask:
     return app
 
 
+def _validate_ip_address(ip_str: str) -> str:
+    """Validate IP address format and return normalized IP."""
+    try:
+        # Parse and validate IP address
+        ip_obj = ipaddress.ip_address(ip_str.strip())
+        
+        # Check for dangerous IP ranges
+        if ip_obj.is_private and not ip_obj.is_loopback:
+            logger.debug(f"Private IP detected: {ip_obj}")
+        elif ip_obj.is_loopback:
+            logger.debug(f"Loopback IP detected: {ip_obj}")
+        elif ip_obj.is_multicast:
+            logger.warning(f"Multicast IP rejected: {ip_obj}")
+            return "127.0.0.1"
+        elif ip_obj.is_reserved:
+            logger.warning(f"Reserved IP rejected: {ip_obj}")
+            return "127.0.0.1"
+            
+        return str(ip_obj)
+        
+    except (ipaddress.AddressValueError, ValueError) as e:
+        logger.warning(f"Invalid IP address format '{ip_str}': {e}")
+        return "127.0.0.1"
+
+
 def _get_client_ip(request) -> str:
-    """Extract client IP address from request."""
+    """Extract client IP address from request with validation."""
     
     if config.nginx_enabled:
-        # NGINX MODE: Trust proxy headers from nginx
+        # NGINX MODE: Trust but validate proxy headers from nginx
         logger.debug("NGINX mode: Using proxy headers for IP detection")
         
         # nginx sets X-Real-IP with the actual client IP
         real_ip = request.headers.get("X-Real-IP")
         if real_ip:
-            logger.debug(f"Using nginx X-Real-IP: {real_ip}")
-            return real_ip
+            validated_ip = _validate_ip_address(real_ip)
+            logger.debug(f"Using nginx X-Real-IP: {real_ip} -> {validated_ip}")
+            return validated_ip
             
         # Fallback to X-Forwarded-For from nginx
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
             client_ip = forwarded_for.split(",")[0].strip()
-            logger.debug(f"Using nginx X-Forwarded-For: {client_ip}")
-            return client_ip
+            validated_ip = _validate_ip_address(client_ip)
+            logger.debug(f"Using nginx X-Forwarded-For: {client_ip} -> {validated_ip}")
+            return validated_ip
             
         # Should not happen with proper nginx config
         logger.warning("NGINX mode but no proxy headers found")
@@ -443,14 +489,17 @@ def _get_client_ip(request) -> str:
                 if client_ip.startswith(telegram_ip):
                     logger.debug(f"Skipping Telegram forwarded IP: {client_ip}")
                     return "127.0.0.1"
-            logger.debug(f"Using X-Forwarded-For IP: {client_ip}")
-            return client_ip
+            validated_ip = _validate_ip_address(client_ip)
+            logger.debug(f"Using X-Forwarded-For IP: {client_ip} -> {validated_ip}")
+            return validated_ip
         elif real_ip:
-            logger.debug(f"Using X-Real-IP: {real_ip}")
-            return real_ip
+            validated_ip = _validate_ip_address(real_ip)
+            logger.debug(f"Using X-Real-IP: {real_ip} -> {validated_ip}")
+            return validated_ip
         else:
-            logger.debug(f"Using remote_addr: {remote_addr}")
-            return remote_addr
+            validated_ip = _validate_ip_address(remote_addr or "127.0.0.1")
+            logger.debug(f"Using remote_addr: {remote_addr} -> {validated_ip}")
+            return validated_ip
 
 
 def _wait_for_uniform_response(start_time: float, target_duration: float) -> None:

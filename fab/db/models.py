@@ -7,7 +7,7 @@ Contains data access objects (DAO) for simplified whitelist-based system.
 import json
 import uuid
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from typing import Optional, List
 from enum import Enum
@@ -45,7 +45,7 @@ class WhitelistUser:
         last_name: Optional[str] = None
     ) -> "WhitelistUser":
         """Add user to whitelist."""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         
         db.execute(
             """INSERT OR REPLACE INTO whitelist_users 
@@ -128,7 +128,7 @@ class UserSession:
     def create(cls, telegram_user_id: int, chat_id: int, expiry_seconds: int) -> "UserSession":
         """Create new user session in database."""
         token = str(uuid.uuid4())
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         expires_at = now + timedelta(seconds=expiry_seconds)
         
         db.execute(
@@ -162,10 +162,20 @@ class UserSession:
     
     def is_expired(self) -> bool:
         """Check if session has expired."""
-        return datetime.now() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
+    
+    def set_ip(self, ip_address: str) -> None:
+        """Set IP address without marking session as used."""
+        self.ip_address = ip_address
+        
+        db.execute(
+            "UPDATE user_sessions SET ip_address = ? WHERE token = ?",
+            (ip_address, self.token)
+        )
+        logger.debug(f"Session {self.token} IP set to {ip_address}")
     
     def use(self, ip_address: str) -> None:
-        """Mark session as used and set IP address."""
+        """Mark session as used and set IP address (deprecated - use use_atomic)."""
         self.used = True
         self.ip_address = ip_address
         
@@ -174,6 +184,24 @@ class UserSession:
             (ip_address, self.token)
         )
         logger.info(f"Session {self.token} used by IP {ip_address}")
+    
+    def use_atomic(self, ip_address: str) -> bool:
+        """Atomically mark session as used if not already used."""
+        cursor = db.execute(
+            "UPDATE user_sessions SET used = 1, ip_address = ? WHERE token = ? AND used = 0",
+            (ip_address, self.token)
+        )
+        
+        if cursor.rowcount == 1:
+            # Successfully marked as used
+            self.used = True
+            self.ip_address = ip_address
+            logger.info(f"Session {self.token} used by IP {ip_address}")
+            return True
+        else:
+            # Session was already used by another request
+            logger.warning(f"Session {self.token} already used - atomic update failed")
+            return False
     
     def delete(self) -> None:
         """Delete session from database."""
@@ -218,7 +246,7 @@ class AccessRequest:
     ) -> "AccessRequest":
         """Create new access request in database."""
         request_id = str(uuid.uuid4())
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         expires_at = now + timedelta(seconds=duration) if duration > 0 else None
         
         db.execute(
@@ -262,14 +290,14 @@ class AccessRequest:
                WHERE telegram_user_id = ? AND status = 'open' 
                AND (expires_at IS NULL OR expires_at > ?)
                ORDER BY created_at DESC""",
-            (telegram_user_id, datetime.now())
+            (telegram_user_id, datetime.now(timezone.utc))
         )
         return [cls._from_row(row) for row in rows]
     
     def close(self) -> None:
         """Close the access request."""
         self.status = AccessStatus.CLOSED
-        self.closed_at = datetime.now()
+        self.closed_at = datetime.now(timezone.utc)
         
         db.execute(
             """UPDATE access_requests 
@@ -283,7 +311,7 @@ class AccessRequest:
         """Check if access request has expired."""
         if not self.expires_at:
             return False
-        return datetime.now() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
     
     def to_rabbitmq_message(self) -> str:
         """Convert access request to RabbitMQ JSON message."""

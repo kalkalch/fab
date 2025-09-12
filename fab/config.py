@@ -85,7 +85,7 @@ class Config:
         
         # Security Configuration
         self.secret_key: str = os.getenv("SECRET_KEY", self._generate_secret_key())
-        self.access_token_expiry: int = int(os.getenv("ACCESS_TOKEN_EXPIRY", "3600"))
+        self.access_token_expiry: int = int(os.getenv("ACCESS_TOKEN_EXPIRY", "3600"))(os.getenv("ACCESS_TOKEN_EXPIRY", "3600"))
         
         # Proxy Configuration
         self.nginx_enabled: bool = os.getenv("NGINX_ENABLED", "false").lower() in ("true", "1", "yes")
