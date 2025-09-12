@@ -72,6 +72,7 @@ class Config:
             self.rabbitmq_exchange: str = os.getenv("RABBITMQ_EXCHANGE", "")
             self.rabbitmq_exchange_type: str = os.getenv("RABBITMQ_EXCHANGE_TYPE", "direct")
             self.rabbitmq_routing_key: str = os.getenv("RABBITMQ_ROUTING_KEY", "firewall.access")
+            self.rabbitmq_queue_type: str = os.getenv("RABBITMQ_QUEUE_TYPE", "classic")
         else:
             # Set defaults when disabled (won't be used, but safe values)
             self.rabbitmq_host: str = ""
@@ -83,6 +84,7 @@ class Config:
             self.rabbitmq_exchange: str = ""
             self.rabbitmq_exchange_type: str = "direct"
             self.rabbitmq_routing_key: str = ""
+            self.rabbitmq_queue_type: str = "classic"
         
         # Security Configuration
         self.secret_key: str = os.getenv("SECRET_KEY", self._generate_secret_key())

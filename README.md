@@ -167,6 +167,7 @@ RABBITMQ_VHOST=/
 RABBITMQ_EXCHANGE=
 RABBITMQ_EXCHANGE_TYPE=direct
 RABBITMQ_ROUTING_KEY=firewall.access
+RABBITMQ_QUEUE_TYPE=classic
 ```
 
 ### Environment Variables
@@ -193,6 +194,7 @@ RABBITMQ_ROUTING_KEY=firewall.access
 | `RABBITMQ_EXCHANGE` | RabbitMQ exchange name (empty = default) | `` | Only if enabled |
 | `RABBITMQ_EXCHANGE_TYPE` | Exchange type (direct/fanout/topic/headers) | `direct` | Only if enabled |
 | `RABBITMQ_ROUTING_KEY` | RabbitMQ routing key | `firewall.access` | Only if enabled |
+| `RABBITMQ_QUEUE_TYPE` | Queue type (classic/quorum) | `classic` | Only if enabled |
 
 ## Usage
 
@@ -241,6 +243,27 @@ RABBITMQ_ROUTING_KEY=firewall.access
    - Monitor access status in real-time
 
 **Note**: The application works without RabbitMQ - set `RABBITMQ_ENABLED=false` to run without message queue. All access events will still be logged to stdout.
+
+### RabbitMQ Queue Types
+
+FAB supports two types of RabbitMQ queues:
+
+#### Classic Queues (default)
+- **When to use**: Standard deployments, single-node setups, development
+- **Requirements**: None special
+- **Performance**: Good for most use cases
+- **Configuration**: `RABBITMQ_QUEUE_TYPE=classic`
+
+#### Quorum Queues  
+- **When to use**: High-availability production deployments with clustering
+- **Requirements**: 
+  - RabbitMQ 3.8.0+ 
+  - **Minimum 3-node cluster**
+  - More RAM and CPU resources
+- **Benefits**: Enhanced durability, automatic leader election, better replication
+- **Configuration**: `RABBITMQ_QUEUE_TYPE=quorum`
+
+**⚠️ Important**: Quorum queues require a RabbitMQ cluster with at least 3 nodes. For single-node deployments, use classic queues.
 
 ## Production Deployment with nginx
 

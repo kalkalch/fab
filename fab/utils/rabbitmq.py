@@ -61,9 +61,19 @@ class RabbitMQPublisher:
                 )
             
             # Declare queue (create if doesn't exist)
+            queue_arguments = {}
+            if config.rabbitmq_queue_type == "quorum":
+                queue_arguments["x-queue-type"] = "quorum"
+                # Quorum queues are always durable
+                durable = True
+            else:
+                # Classic queue
+                durable = True
+            
             self._channel.queue_declare(
                 queue=config.rabbitmq_queue,
-                durable=True
+                durable=durable,
+                arguments=queue_arguments
             )
             
             # Bind queue to exchange if exchange is specified
@@ -80,7 +90,7 @@ class RabbitMQPublisher:
                 )
             
             logger.info(f"Connected to RabbitMQ at {config.rabbitmq_host}:{config.rabbitmq_port}{config.rabbitmq_vhost}")
-            logger.debug(f"Using queue: {config.rabbitmq_queue}")
+            logger.debug(f"Using {config.rabbitmq_queue_type} queue: {config.rabbitmq_queue}")
             if config.rabbitmq_exchange:
                 logger.debug(f"Using {config.rabbitmq_exchange_type} exchange: {config.rabbitmq_exchange}")
                 if config.rabbitmq_routing_key:
