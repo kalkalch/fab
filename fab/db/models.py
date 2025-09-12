@@ -14,6 +14,13 @@ from enum import Enum
 
 from .database import db
 
+
+def _get_db():
+    """Get database instance with proper error handling."""
+    if db is None:
+        raise RuntimeError("Database not initialized. Call Database() in main.py first.")
+    return db
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,7 +54,7 @@ class WhitelistUser:
         """Add user to whitelist."""
         now = datetime.now(timezone.utc)
         
-        db.execute(
+        _get_db().execute(
             """INSERT OR REPLACE INTO whitelist_users 
                (telegram_user_id, username, first_name, last_name, 
                 added_by_admin_id, created_at, updated_at)
@@ -72,7 +79,7 @@ class WhitelistUser:
     @classmethod
     def remove(cls, telegram_user_id: int) -> bool:
         """Remove user from whitelist."""
-        cursor = db.execute(
+        cursor = _get_db().execute(
             "DELETE FROM whitelist_users WHERE telegram_user_id = ?",
             (telegram_user_id,)
         )
@@ -84,7 +91,7 @@ class WhitelistUser:
     @classmethod
     def is_whitelisted(cls, telegram_user_id: int) -> bool:
         """Check if user is in whitelist."""
-        row = db.fetchone(
+        row = _get_db().fetchone(
             "SELECT 1 FROM whitelist_users WHERE telegram_user_id = ?",
             (telegram_user_id,)
         )
@@ -93,7 +100,7 @@ class WhitelistUser:
     @classmethod
     def get_all(cls) -> List["WhitelistUser"]:
         """Get all whitelisted users."""
-        rows = db.fetchall(
+        rows = _get_db().fetchall(
             "SELECT * FROM whitelist_users ORDER BY created_at"
         )
         return [cls._from_row(row) for row in rows]
@@ -131,7 +138,7 @@ class UserSession:
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(seconds=expiry_seconds)
         
-        db.execute(
+        _get_db().execute(
             """INSERT INTO user_sessions 
                (token, telegram_user_id, chat_id, created_at, expires_at, used)
                VALUES (?, ?, ?, ?, ?, ?)""",
@@ -154,7 +161,7 @@ class UserSession:
     @classmethod
     def get_by_token(cls, token: str) -> Optional["UserSession"]:
         """Get session by token."""
-        row = db.fetchone(
+        row = _get_db().fetchone(
             "SELECT * FROM user_sessions WHERE token = ?",
             (token,)
         )
@@ -168,7 +175,7 @@ class UserSession:
         """Set IP address without marking session as used."""
         self.ip_address = ip_address
         
-        db.execute(
+        _get_db().execute(
             "UPDATE user_sessions SET ip_address = ? WHERE token = ?",
             (ip_address, self.token)
         )
@@ -179,7 +186,7 @@ class UserSession:
         self.used = True
         self.ip_address = ip_address
         
-        db.execute(
+        _get_db().execute(
             "UPDATE user_sessions SET used = 1, ip_address = ? WHERE token = ?",
             (ip_address, self.token)
         )
@@ -187,7 +194,7 @@ class UserSession:
     
     def use_atomic(self, ip_address: str) -> bool:
         """Atomically mark session as used if not already used."""
-        cursor = db.execute(
+        cursor = _get_db().execute(
             "UPDATE user_sessions SET used = 1, ip_address = ? WHERE token = ? AND used = 0",
             (ip_address, self.token)
         )
@@ -205,7 +212,7 @@ class UserSession:
     
     def delete(self) -> None:
         """Delete session from database."""
-        db.execute("DELETE FROM user_sessions WHERE token = ?", (self.token,))
+        _get_db().execute("DELETE FROM user_sessions WHERE token = ?", (self.token,))
         logger.info(f"Deleted session {self.token}")
     
     @classmethod
@@ -249,7 +256,7 @@ class AccessRequest:
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(seconds=duration) if duration > 0 else None
         
-        db.execute(
+        _get_db().execute(
             """INSERT INTO access_requests 
                (id, telegram_user_id, chat_id, ip_address, duration, status, 
                 created_at, expires_at)
@@ -276,7 +283,7 @@ class AccessRequest:
     @classmethod
     def get_by_id(cls, request_id: str) -> Optional["AccessRequest"]:
         """Get access request by ID."""
-        row = db.fetchone(
+        row = _get_db().fetchone(
             "SELECT * FROM access_requests WHERE id = ?",
             (request_id,)
         )
@@ -285,7 +292,7 @@ class AccessRequest:
     @classmethod
     def get_active_for_user(cls, telegram_user_id: int) -> List["AccessRequest"]:
         """Get all active access requests for user."""
-        rows = db.fetchall(
+        rows = _get_db().fetchall(
             """SELECT * FROM access_requests 
                WHERE telegram_user_id = ? AND status = 'open' 
                AND (expires_at IS NULL OR expires_at > ?)
@@ -299,7 +306,7 @@ class AccessRequest:
         self.status = AccessStatus.CLOSED
         self.closed_at = datetime.now(timezone.utc)
         
-        db.execute(
+        _get_db().execute(
             """UPDATE access_requests 
                SET status = 'closed', closed_at = ? 
                WHERE id = ?""",

@@ -12,6 +12,13 @@ from .models import WhitelistUser, UserSession, AccessRequest
 from .database import db
 from ..config import config
 
+
+def _get_db():
+    """Get database instance with proper error handling."""
+    if db is None:
+        raise RuntimeError("Database not initialized. Call Database() in main.py first.")
+    return db
+
 logger = logging.getLogger(__name__)
 
 
@@ -115,8 +122,8 @@ class DatabaseManager:
     
     def cleanup_expired_data(self) -> dict:
         """Clean up expired sessions and access requests."""
-        sessions_removed = db.cleanup_expired_sessions()
-        requests_closed = db.cleanup_expired_access_requests()
+        sessions_removed = _get_db().cleanup_expired_sessions()
+        requests_closed = _get_db().cleanup_expired_access_requests()
         
         return {
             'expired_sessions_removed': sessions_removed,
@@ -125,11 +132,11 @@ class DatabaseManager:
     
     def get_statistics(self) -> dict:
         """Get database statistics."""
-        return db.get_stats()
+        return _get_db().get_stats()
     
     def close(self) -> None:
         """Close database connections."""
-        db.close()
+        _get_db().close()
 
 
 # Global database manager instance

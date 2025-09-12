@@ -17,6 +17,7 @@ from fab.web.server import create_server
 from fab.utils.rabbitmq import rabbitmq_service
 from fab.db.database import Database
 from fab.db.manager import db_manager
+from fab.db import database as db_module
 
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,10 @@ class FABApplication:
             # Initialize database
             logger.info("Initializing database...")
             self.database = Database(config.database_path)
+            
+            # Set global database instance for models to use
+            db_module.db = self.database
+            
             logger.info("Database initialized successfully")
             
             # Start RabbitMQ service (optional)

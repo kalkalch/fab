@@ -194,5 +194,5 @@ class Database:
         logger.info("Database connections closed")
 
 
-# Global database instance
-db = Database()
+# Global database instance - will be initialized in main.py
+db = None

@@ -120,10 +120,20 @@ def _validate_ip_headers(request) -> bool:
     for header_name in request.headers.keys():
         header_lower = header_name.lower()
         
+        # Debug logging for troubleshooting
+        if header_lower in ['x-forwarded-host', 'x-forwarded-server', 'x-forwarded-ssl']:
+            logger.debug(f"Processing header: {header_name} -> {header_lower}")
+            logger.debug(f"nginx_enabled: {config.nginx_enabled}")
+            logger.debug(f"in always_dangerous: {header_lower in always_dangerous}")
+            logger.debug(f"in nginx_headers: {header_lower in nginx_headers}")
+        
         if header_lower in always_dangerous:
             logger.warning(f"Suspicious IP header detected: {header_name}")
         elif header_lower in nginx_headers and not config.nginx_enabled:
             logger.warning(f"Unexpected proxy header (nginx disabled): {header_name}")
+        elif header_lower in nginx_headers and config.nginx_enabled:
+            logger.debug(f"Legitimate nginx header: {header_name}")
+            # This is expected and legitimate - no warning needed
             
         # Check for multiple X-Forwarded-For or X-Real-IP headers (header injection)
         if header_lower in ['x-forwarded-for', 'x-real-ip']:
