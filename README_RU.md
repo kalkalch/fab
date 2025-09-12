@@ -165,6 +165,7 @@ RABBITMQ_PASSWORD=guest
 RABBITMQ_QUEUE=firewall_access
 RABBITMQ_VHOST=/
 RABBITMQ_EXCHANGE=
+RABBITMQ_EXCHANGE_TYPE=direct
 RABBITMQ_ROUTING_KEY=firewall.access
 ```
 
@@ -190,6 +191,7 @@ RABBITMQ_ROUTING_KEY=firewall.access
 | `RABBITMQ_QUEUE` | Имя очереди RabbitMQ | `firewall_access` | Только если включен |
 | `RABBITMQ_VHOST` | Виртуальный хост RabbitMQ (должен начинаться с `/`) | `/` | Только если включен |
 | `RABBITMQ_EXCHANGE` | Имя обменника RabbitMQ (пустое = default) | `` | Только если включен |
+| `RABBITMQ_EXCHANGE_TYPE` | Тип обменника (direct/fanout/topic/headers) | `direct` | Только если включен |
 | `RABBITMQ_ROUTING_KEY` | Ключ маршрутизации RabbitMQ | `firewall.access` | Только если включен |
 
 ## Использование

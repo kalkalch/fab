@@ -56,7 +56,7 @@ class RabbitMQPublisher:
             if config.rabbitmq_exchange:
                 self._channel.exchange_declare(
                     exchange=config.rabbitmq_exchange,
-                    exchange_type="direct",
+                    exchange_type=config.rabbitmq_exchange_type,
                     durable=True
                 )
             
@@ -66,18 +66,27 @@ class RabbitMQPublisher:
                 durable=True
             )
             
-            # Bind queue to exchange if both are specified
-            if config.rabbitmq_exchange and config.rabbitmq_routing_key:
+            # Bind queue to exchange if exchange is specified
+            if config.rabbitmq_exchange:
+                # Use routing key, or queue name as fallback for direct exchange
+                binding_key = config.rabbitmq_routing_key
+                if not binding_key and config.rabbitmq_exchange_type == "direct":
+                    binding_key = config.rabbitmq_queue
+                
                 self._channel.queue_bind(
                     exchange=config.rabbitmq_exchange,
                     queue=config.rabbitmq_queue,
-                    routing_key=config.rabbitmq_routing_key
+                    routing_key=binding_key or ""  # Empty for fanout
                 )
             
             logger.info(f"Connected to RabbitMQ at {config.rabbitmq_host}:{config.rabbitmq_port}{config.rabbitmq_vhost}")
             logger.debug(f"Using queue: {config.rabbitmq_queue}")
             if config.rabbitmq_exchange:
-                logger.debug(f"Using exchange: {config.rabbitmq_exchange}")
+                logger.debug(f"Using {config.rabbitmq_exchange_type} exchange: {config.rabbitmq_exchange}")
+                if config.rabbitmq_routing_key:
+                    logger.debug(f"Routing key: {config.rabbitmq_routing_key}")
+            else:
+                logger.debug("Using default exchange (direct routing to queue)")
             return True
             
         except AMQPConnectionError as e:
@@ -114,9 +123,21 @@ class RabbitMQPublisher:
                 return False
         
         try:
-            # Use configured exchange and routing key
+            # Determine exchange and routing key based on configuration
             exchange = config.rabbitmq_exchange
-            routing_key = config.rabbitmq_routing_key or config.rabbitmq_queue
+            
+            if exchange:
+                # Using custom exchange
+                routing_key = config.rabbitmq_routing_key
+                # For fanout exchange, routing key is ignored
+                if config.rabbitmq_exchange_type == "fanout":
+                    routing_key = ""
+                # For direct exchange without routing key, use queue name
+                elif not routing_key and config.rabbitmq_exchange_type == "direct":
+                    routing_key = config.rabbitmq_queue
+            else:
+                # Using default exchange - routing key is the queue name
+                routing_key = config.rabbitmq_queue
             
             self._channel.basic_publish(
                 exchange=exchange,
@@ -129,7 +150,10 @@ class RabbitMQPublisher:
             )
             
             if exchange:
-                logger.info(f"Published message to exchange '{exchange}' with routing key '{routing_key}'")
+                if config.rabbitmq_exchange_type == "fanout":
+                    logger.info(f"Published message to fanout exchange '{exchange}' (all bound queues)")
+                else:
+                    logger.info(f"Published message to {config.rabbitmq_exchange_type} exchange '{exchange}' with routing key '{routing_key}'")
             else:
                 logger.info(f"Published message to queue '{routing_key}' (default exchange)")
             logger.debug(f"Message content: {message}")

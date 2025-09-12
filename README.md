@@ -165,6 +165,7 @@ RABBITMQ_PASSWORD=guest
 RABBITMQ_QUEUE=firewall_access
 RABBITMQ_VHOST=/
 RABBITMQ_EXCHANGE=
+RABBITMQ_EXCHANGE_TYPE=direct
 RABBITMQ_ROUTING_KEY=firewall.access
 ```
 
@@ -190,6 +191,7 @@ RABBITMQ_ROUTING_KEY=firewall.access
 | `RABBITMQ_QUEUE` | RabbitMQ queue name | `firewall_access` | Only if enabled |
 | `RABBITMQ_VHOST` | RabbitMQ virtual host (must start with `/`) | `/` | Only if enabled |
 | `RABBITMQ_EXCHANGE` | RabbitMQ exchange name (empty = default) | `` | Only if enabled |
+| `RABBITMQ_EXCHANGE_TYPE` | Exchange type (direct/fanout/topic/headers) | `direct` | Only if enabled |
 | `RABBITMQ_ROUTING_KEY` | RabbitMQ routing key | `firewall.access` | Only if enabled |
 
 ## Usage

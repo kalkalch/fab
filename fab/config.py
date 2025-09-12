@@ -70,6 +70,7 @@ class Config:
                     vhost = "/" + vhost
             self.rabbitmq_vhost: str = vhost
             self.rabbitmq_exchange: str = os.getenv("RABBITMQ_EXCHANGE", "")
+            self.rabbitmq_exchange_type: str = os.getenv("RABBITMQ_EXCHANGE_TYPE", "direct")
             self.rabbitmq_routing_key: str = os.getenv("RABBITMQ_ROUTING_KEY", "firewall.access")
         else:
             # Set defaults when disabled (won't be used, but safe values)
@@ -80,6 +81,7 @@ class Config:
             self.rabbitmq_queue: str = ""
             self.rabbitmq_vhost: str = "/"  # Keep valid default even when disabled
             self.rabbitmq_exchange: str = ""
+            self.rabbitmq_exchange_type: str = "direct"
             self.rabbitmq_routing_key: str = ""
         
         # Security Configuration
