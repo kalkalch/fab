@@ -196,7 +196,7 @@ RABBITMQ_QUEUE_TYPE=classic
 | `RABBITMQ_USERNAME` | Имя пользователя RabbitMQ | `guest` | Только если включен |
 | `RABBITMQ_PASSWORD` | Пароль RabbitMQ | `guest` | Только если включен |
 | `RABBITMQ_QUEUE` | Имя очереди RabbitMQ | `firewall_access` | Только если включен |
-| `RABBITMQ_VHOST` | Виртуальный хост RabbitMQ (должен начинаться с `/`) | `/` | Только если включен |
+| `RABBITMQ_VHOST` | Виртуальный хост RabbitMQ (используйте `/` для default vhost) | `/` | Только если включен |
 | `RABBITMQ_EXCHANGE` | Имя обменника RabbitMQ (пустое = default) | `` | Только если включен |
 | `RABBITMQ_EXCHANGE_TYPE` | Тип обменника (direct/fanout/topic/headers) | `direct` | Только если включен |
 | `RABBITMQ_ROUTING_KEY` | Ключ маршрутизации RabbitMQ | `firewall.access` | Только если включен |
@@ -315,7 +315,7 @@ RABBITMQ_HOST=rabbitmq-cluster.corp.com
 RABBITMQ_PORT=5672
 RABBITMQ_USERNAME=fab_service
 RABBITMQ_PASSWORD=secure_password
-RABBITMQ_VHOST=/production
+RABBITMQ_VHOST=/production  # Примечание: "/" часть имени vhost
 RABBITMQ_QUEUE_TYPE=quorum
 RABBITMQ_EXCHANGE=security_hub
 RABBITMQ_ROUTING_KEY=firewall.events
@@ -348,6 +348,10 @@ RABBITMQ_ENABLED=false
   - Проверьте правильность имени пользователя/пароля
   - Убедитесь, что пользователь имеет права на vhost
   - Убедитесь, что vhost существует: `rabbitmqctl list_vhosts`
+  - **Примечание**: FAB использует точное значение vhost, которое вы указываете:
+    - `RABBITMQ_VHOST=/` → default vhost
+    - `RABBITMQ_VHOST=/production` → vhost с именем "/production"
+    - `RABBITMQ_VHOST=production` → vhost с именем "production" (без автоматического добавления "/")
 
 #### Ошибки создания очереди
 - **Ошибка**: `PRECONDITION_FAILED` для типа очереди

@@ -61,13 +61,10 @@ class Config:
             self.rabbitmq_password: str = os.getenv("RABBITMQ_PASSWORD", "guest")
             self.rabbitmq_queue: str = os.getenv("RABBITMQ_QUEUE", "firewall_access")
             # Handle RABBITMQ_VHOST: if not set, default to "/"
+            # User has full control over vhost value
             vhost = os.getenv("RABBITMQ_VHOST")
             if not vhost:
-                vhost = "/"
-            else:
-                # Ensure vhost starts with / (RabbitMQ requirement)
-                if not vhost.startswith("/"):
-                    vhost = "/" + vhost
+                vhost = "/"  # Default RabbitMQ vhost
             self.rabbitmq_vhost: str = vhost
             self.rabbitmq_exchange: str = os.getenv("RABBITMQ_EXCHANGE", "")
             self.rabbitmq_exchange_type: str = os.getenv("RABBITMQ_EXCHANGE_TYPE", "direct")

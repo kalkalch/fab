@@ -196,7 +196,7 @@ RABBITMQ_QUEUE_TYPE=classic
 | `RABBITMQ_USERNAME` | RabbitMQ username | `guest` | Only if enabled |
 | `RABBITMQ_PASSWORD` | RabbitMQ password | `guest` | Only if enabled |
 | `RABBITMQ_QUEUE` | RabbitMQ queue name | `firewall_access` | Only if enabled |
-| `RABBITMQ_VHOST` | RabbitMQ virtual host (must start with `/`) | `/` | Only if enabled |
+| `RABBITMQ_VHOST` | RabbitMQ virtual host (use `/` for default vhost) | `/` | Only if enabled |
 | `RABBITMQ_EXCHANGE` | RabbitMQ exchange name (empty = default) | `` | Only if enabled |
 | `RABBITMQ_EXCHANGE_TYPE` | Exchange type (direct/fanout/topic/headers) | `direct` | Only if enabled |
 | `RABBITMQ_ROUTING_KEY` | RabbitMQ routing key | `firewall.access` | Only if enabled |
@@ -315,7 +315,7 @@ RABBITMQ_HOST=rabbitmq-cluster.corp.com
 RABBITMQ_PORT=5672
 RABBITMQ_USERNAME=fab_service
 RABBITMQ_PASSWORD=secure_password
-RABBITMQ_VHOST=/production
+RABBITMQ_VHOST=/production  # Note: "/" is part of vhost name
 RABBITMQ_QUEUE_TYPE=quorum
 RABBITMQ_EXCHANGE=security_hub
 RABBITMQ_ROUTING_KEY=firewall.events
@@ -348,6 +348,10 @@ RABBITMQ_ENABLED=false
   - Verify username/password are correct
   - Check if user has permissions on the vhost
   - Ensure vhost exists: `rabbitmqctl list_vhosts`
+  - **Note**: FAB uses exact vhost value you specify:
+    - `RABBITMQ_VHOST=/` → default vhost
+    - `RABBITMQ_VHOST=/production` → vhost named "/production"
+    - `RABBITMQ_VHOST=production` → vhost named "production" (no auto-prefixing)
 
 #### Queue Declaration Failures
 - **Error**: `PRECONDITION_FAILED` for queue type
