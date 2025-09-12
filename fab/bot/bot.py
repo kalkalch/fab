@@ -33,13 +33,13 @@ class FABBot:
     
     def _setup_application(self) -> None:
         """Setup the bot application with handlers."""
-        # Create custom request with longer timeouts
+        # Create custom request with longer timeouts for slow networks
         request = HTTPXRequest(
             connection_pool_size=10,
-            read_timeout=30.0,
-            write_timeout=30.0,
-            connect_timeout=15.0,
-            pool_timeout=10.0
+            read_timeout=60.0,      # Increased from 30s for slow networks
+            write_timeout=45.0,     # Increased from 30s 
+            connect_timeout=30.0,   # Increased from 15s for high latency
+            pool_timeout=20.0       # Increased from 10s
         )
         
         # Create application with custom request and rate limiting
@@ -141,20 +141,24 @@ class FABBot:
                 
                 # Test connection by getting bot info
                 logger.debug("Testing connection to Telegram API...")
+                import time
+                start_time = time.time()
                 bot = self.application.bot
                 bot_info = await bot.get_me()
+                connection_time = time.time() - start_time
                 logger.info(f"Bot connected successfully: @{bot_info.username} (ID: {bot_info.id})")
+                logger.info(f"Connection established in {connection_time:.2f} seconds")
                 
-                # Start polling with optimal settings for stability
+                # Start polling with settings optimized for slow networks
                 logger.debug("Starting polling for updates...")
                 await self.application.updater.start_polling(
                     drop_pending_updates=True,
                     timeout=40,           # Near maximum for fewer requests
-                    bootstrap_retries=5,  # More retries for Bad Gateway
-                    read_timeout=50,      # Account for 40s timeout + network delay
-                    write_timeout=30,
-                    connect_timeout=15,
-                    pool_timeout=10,
+                    bootstrap_retries=7,  # More retries for unreliable networks
+                    read_timeout=80,      # Increased for slow networks (40s timeout + 40s buffer)
+                    write_timeout=45,     # Increased from 30s
+                    connect_timeout=30,   # Increased from 15s for high latency
+                    pool_timeout=20,      # Increased from 10s
                     allowed_updates=["message", "callback_query"],  # Only needed updates
                     error_callback=self._polling_error_callback
                 )
