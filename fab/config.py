@@ -54,7 +54,7 @@ class Config:
         self.rabbitmq_enabled: bool = os.getenv("RABBITMQ_ENABLED", "false").lower() in ("true", "1", "yes")
         
         # Only load RabbitMQ settings if enabled
-        if self.rabbitmq_enabled: self.rabbitmq_enabled:
+        if self.rabbitmq_enabled:
             self.rabbitmq_host: str = self._get_required_env("RABBITMQ_HOST")
             self.rabbitmq_port: int = int(os.getenv("RABBITMQ_PORT", "5672"))
             self.rabbitmq_username: str = os.getenv("RABBITMQ_USERNAME", "guest")
