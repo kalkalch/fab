@@ -1,4 +1,4 @@
-окументаци"""
+"""
 Web server module for FAB.
 
 Flask-based HTTP server for handling web interface requests,
@@ -282,6 +282,12 @@ def create_app() -> Flask:
             # Mark session as used atomically
             if not session.use_atomic(client_ip):
                 logger.warning(f"Failed to use session {token[:8]}... - already used by another request")
+                _wait_for_uniform_response(start_time, 0.3)
+                return "OK", 200
+            
+            # Ensure access_manager is initialized
+            if access_module.access_manager is None:
+                logger.error("Access manager not initialized during access creation")
                 _wait_for_uniform_response(start_time, 0.3)
                 return "OK", 200
             

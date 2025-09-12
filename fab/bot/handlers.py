@@ -298,7 +298,7 @@ async def handle_close_access(query, user_id: int, access_id: str) -> None:
         
         request = access_module.access_manager.close_access_request(access_id)
         
-        if request and request.user_id == user_id:
+        if request and request.telegram_user_id == user_id:
             # Send message to RabbitMQ and log
             message = request.to_rabbitmq_message()
             rabbitmq_service.publish_access_event(message)
