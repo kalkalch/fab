@@ -40,7 +40,13 @@ A Telegram bot for managing firewall access with web interface and RabbitMQ inte
    - JSON message generation for access events
    - Can be enabled/disabled via `RABBITMQ_ENABLED` environment variable
    - When disabled, all RabbitMQ configuration variables are ignored
-   - All access events are always logged to stdout
+   - **Advanced Configuration**:
+     - Support for custom exchanges (direct/fanout/topic/headers)
+     - Configurable routing keys and queue bindings
+     - Virtual host (vhost) support with auto-validation
+     - Both classic and quorum queue types
+     - Enterprise authentication support
+   - All access events are always logged to stdout as backup
    - Message contains:
      - Access status (open/closed)
      - User IP address
@@ -264,6 +270,105 @@ FAB supports two types of RabbitMQ queues:
 - **Configuration**: `RABBITMQ_QUEUE_TYPE=quorum`
 
 **⚠️ Important**: Quorum queues require a RabbitMQ cluster with at least 3 nodes. For single-node deployments, use classic queues.
+
+### RabbitMQ Configuration Examples
+
+#### Scenario 1: Simple Setup (Recommended for most users)
+```env
+RABBITMQ_ENABLED=true
+RABBITMQ_HOST=localhost
+RABBITMQ_QUEUE=firewall_access
+# Other variables use defaults
+```
+- Uses default exchange with direct routing to queue
+- Messages go directly to `firewall_access` queue
+- Simple and reliable
+
+#### Scenario 2: Custom Exchange with Routing
+```env
+RABBITMQ_ENABLED=true
+RABBITMQ_HOST=rabbitmq.example.com
+RABBITMQ_EXCHANGE=security_events
+RABBITMQ_EXCHANGE_TYPE=direct
+RABBITMQ_ROUTING_KEY=firewall.access.granted
+RABBITMQ_QUEUE=firewall_notifications
+```
+- Uses custom exchange for organizing different event types
+- Allows multiple consumers for different routing keys
+
+#### Scenario 3: Fanout for Multiple Consumers
+```env
+RABBITMQ_ENABLED=true
+RABBITMQ_HOST=rabbitmq.example.com
+RABBITMQ_EXCHANGE=broadcast_events
+RABBITMQ_EXCHANGE_TYPE=fanout
+RABBITMQ_QUEUE=firewall_logger
+# RABBITMQ_ROUTING_KEY is ignored for fanout
+```
+- All messages sent to all queues bound to the exchange
+- Good for monitoring, logging, and alerting systems
+
+#### Scenario 4: Enterprise with Authentication
+```env
+RABBITMQ_ENABLED=true
+RABBITMQ_HOST=rabbitmq-cluster.corp.com
+RABBITMQ_PORT=5672
+RABBITMQ_USERNAME=fab_service
+RABBITMQ_PASSWORD=secure_password
+RABBITMQ_VHOST=/production
+RABBITMQ_QUEUE_TYPE=quorum
+RABBITMQ_EXCHANGE=security_hub
+RABBITMQ_ROUTING_KEY=firewall.events
+```
+- Production setup with authentication
+- Custom vhost for isolation
+- Quorum queues for high availability
+
+#### Scenario 5: Disabled RabbitMQ (Development)
+```env
+RABBITMQ_ENABLED=false
+# All other RABBITMQ_* variables are ignored
+```
+- All events logged to stdout only
+- No external dependencies
+
+### RabbitMQ Troubleshooting
+
+#### Connection Issues
+- **Error**: `Failed to connect to RabbitMQ`
+- **Solutions**:
+  - Check `RABBITMQ_HOST` and `RABBITMQ_PORT`
+  - Verify RabbitMQ server is running
+  - Check network connectivity and firewall rules
+  - Validate credentials (`RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`)
+
+#### Authentication Errors
+- **Error**: `ACCESS_REFUSED` 
+- **Solutions**:
+  - Verify username/password are correct
+  - Check if user has permissions on the vhost
+  - Ensure vhost exists: `rabbitmqctl list_vhosts`
+
+#### Queue Declaration Failures
+- **Error**: `PRECONDITION_FAILED` for queue type
+- **Solutions**:
+  - Cannot change queue type from classic to quorum on existing queue
+  - Delete existing queue or use different queue name
+  - For quorum queues: ensure 3+ node cluster
+
+#### Exchange/Routing Issues
+- **Error**: Messages not reaching consumers
+- **Solutions**:
+  - Check exchange type matches routing strategy
+  - Verify routing key bindings: `rabbitmqctl list_bindings`
+  - For fanout: routing key is ignored
+  - For direct: routing key must match exactly
+
+#### Performance Considerations
+- **Classic queues**: Better for single-node, development
+- **Quorum queues**: Better for clusters, production
+- **Fanout exchanges**: Higher resource usage
+- **Direct exchanges**: Most efficient for point-to-point
 
 ## Production Deployment with nginx
 
