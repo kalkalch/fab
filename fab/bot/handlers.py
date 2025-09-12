@@ -10,7 +10,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from ..config import config
-from ..models.access import access_manager
+from ..models import access as access_module
 from ..utils.rabbitmq import rabbitmq_service
 from ..utils.i18n import i18n
 from ..db.manager import db_manager
@@ -174,7 +174,7 @@ async def handle_add_access(query, user_id: int, chat_id: int) -> None:
         i18n.set_language(language)
         
         # Create session for web interface
-        session = access_manager.create_session(
+        session = access_module.access_manager.create_session(
             telegram_user_id=user_id,
             chat_id=chat_id,
             expiry_seconds=config.access_token_expiry
@@ -219,7 +219,7 @@ async def handle_my_access(query, user_id: int) -> None:
         language = get_user_language(user.id, user.language_code)
         i18n.set_language(language)
         
-        active_requests = access_manager.get_active_requests_for_user(user_id)
+        active_requests = access_module.access_manager.get_active_requests_for_user(user_id)
         
         if not active_requests:
             response_text = i18n.get_text("bot.no_active_accesses")
@@ -296,7 +296,7 @@ async def handle_close_access(query, user_id: int, access_id: str) -> None:
         language = get_user_language(user.id, user.language_code)
         i18n.set_language(language)
         
-        request = access_manager.close_access_request(access_id)
+        request = access_module.access_manager.close_access_request(access_id)
         
         if request and request.user_id == user_id:
             # Send message to RabbitMQ and log

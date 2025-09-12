@@ -1,4 +1,4 @@
-"""
+окументаци"""
 Web server module for FAB.
 
 Flask-based HTTP server for handling web interface requests,
@@ -15,7 +15,7 @@ from werkzeug.serving import make_server
 import threading
 
 from ..config import config
-from ..models.access import access_manager
+from ..models import access as access_module
 from ..utils.rabbitmq import rabbitmq_service
 from ..utils.ip_utils import is_local_ip
 from ..utils.i18n import i18n
@@ -201,7 +201,7 @@ def create_app() -> Flask:
                 return "OK", 200
             
             client_ip = _get_client_ip(request)
-            session = access_manager.get_session(token)
+            session = access_module.access_manager.get_session(token)
             
             if not session or session.is_expired():
                 # Wait for uniform response time
@@ -217,7 +217,7 @@ def create_app() -> Flask:
                 session.set_ip(client_ip)
             
             # Get active requests for this user
-            active_requests = access_manager.get_active_requests_for_user(session.telegram_user_id)
+            active_requests = access_module.access_manager.get_active_requests_for_user(session.telegram_user_id)
             
             # Wait for uniform response time
             _wait_for_uniform_response(start_time, 0.5)
@@ -267,7 +267,7 @@ def create_app() -> Flask:
                 _wait_for_uniform_response(start_time, 0.3)
                 return "OK", 200
             
-            session = access_manager.get_session(token)
+            session = access_module.access_manager.get_session(token)
             
             if not session or session.is_expired():
                 _wait_for_uniform_response(start_time, 0.3)
@@ -286,7 +286,7 @@ def create_app() -> Flask:
                 return "OK", 200
             
             # Create access request
-            access_request = access_manager.create_access_request(
+            access_request = access_module.access_manager.create_access_request(
                 telegram_user_id=session.telegram_user_id,
                 chat_id=session.chat_id,
                 duration=duration,
@@ -345,13 +345,13 @@ def create_app() -> Flask:
                     _wait_for_uniform_response(start_time, 0.3)
                     return "OK", 200
                     
-                session = access_manager.get_session(token)
+                session = access_module.access_manager.get_session(token)
                 if not session or session.is_expired():
                     _wait_for_uniform_response(start_time, 0.3)
                     return "OK", 200
             
             # Close access request
-            access_request = access_manager.close_access_request(access_id)
+            access_request = access_module.access_manager.close_access_request(access_id)
             
             if not access_request:
                 _wait_for_uniform_response(start_time, 0.3)
@@ -394,7 +394,7 @@ def create_app() -> Flask:
                 _wait_for_uniform_response(start_time, 0.2)
                 return "OK", 200
             
-            access_request = access_manager.get_access_request(access_id)
+            access_request = access_module.access_manager.get_access_request(access_id)
             
             _wait_for_uniform_response(start_time, 0.2)
             

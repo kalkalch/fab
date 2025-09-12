@@ -53,6 +53,10 @@ class FABApplication:
             # Set global database instance for models to use
             db_module.db = self.database
             
+            # Initialize access manager after database is ready
+            from fab.models import access as access_module
+            access_module._initialize_access_manager()
+            
             logger.info("Database initialized successfully")
             
             # Start RabbitMQ service (optional)

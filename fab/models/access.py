@@ -58,5 +58,13 @@ class AccessManager:
         db_manager.cleanup_expired_data()
 
 
-# Global access manager instance (backward compatibility)
-access_manager = AccessManager()
+# Global access manager instance (initialized after database)
+access_manager = None
+
+
+def _initialize_access_manager():
+    """Initialize access manager after database is ready."""
+    global access_manager
+    if access_manager is None:
+        access_manager = AccessManager()
+        logger.info("Access manager initialized")
