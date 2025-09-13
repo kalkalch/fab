@@ -6,6 +6,7 @@ database-backed storage system.
 """
 
 import logging
+from typing import Optional, List
 from ..db.manager import db_manager
 from ..db.models import AccessRequest, UserSession, AccessStatus
 
