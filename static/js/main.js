@@ -107,12 +107,27 @@ const FAB = {
 
         try {
             const response = await fetch(url, config);
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || `HTTP error! status: ${response.status}`);
+            const contentType = (response.headers.get('content-type') || '').toLowerCase();
+            let data;
+            if (contentType.includes('application/json')) {
+                data = await response.json();
+            } else {
+                const text = (await response.text()).trim();
+                if (text.toUpperCase() === 'OK') {
+                    data = { success: true };
+                } else {
+                    data = { success: false, error: text || 'Invalid response' };
+                }
             }
 
+            if (!response.ok) {
+                const msg = (data && (data.error || data.message)) || `HTTP error! status: ${response.status}`;
+                throw new Error(msg);
+            }
+
+            if (data && typeof data.success === 'boolean') {
+                return { success: data.success, data, error: data.error };
+            }
             return { success: true, data };
         } catch (error) {
             console.error('API request failed:', error);
