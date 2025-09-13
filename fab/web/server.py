@@ -174,10 +174,22 @@ def create_app() -> Flask:
         static_folder="../../static"
     )
     app.secret_key = config.secret_key
+    # Secure session cookies
+    app.config['SESSION_COOKIE_SECURE'] = True
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Strict'
     
     # Configure Flask logging to not interfere with our logging
     import logging
     logging.getLogger('werkzeug').setLevel(logging.WARNING)
+
+    # After-request hook for security headers
+    @app.after_request
+    def add_security_headers(resp):  # type: ignore
+        resp.headers['Referrer-Policy'] = 'no-referrer'
+        resp.headers['X-Content-Type-Options'] = 'nosniff'
+        resp.headers['X-Frame-Options'] = 'DENY'
+        return resp
     
     @app.route("/")
     def index():
@@ -217,7 +229,15 @@ def create_app() -> Flask:
             set_web_user_language(lang)
         
         # Redirect back to the previous page or home
+        from urllib.parse import urlparse
         next_url = request.args.get('next', '/')
+        try:
+            parsed = urlparse(next_url)
+            # Allow only relative paths within site
+            if parsed.scheme or parsed.netloc or not next_url.startswith('/'):
+                next_url = '/'
+        except Exception:
+            next_url = '/'
         return redirect(next_url)
     
     @app.route("/<token>")
@@ -554,6 +574,16 @@ def create_app() -> Flask:
         return "OK", 200
     
     return app
+
+
+@staticmethod
+def _add_security_headers(resp):
+    """Add baseline security headers to every response."""
+    resp.headers['Referrer-Policy'] = 'no-referrer'
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    resp.headers['X-Frame-Options'] = 'DENY'
+    return resp
+
 
 
 def _validate_ip_address(ip_str: str) -> str:
