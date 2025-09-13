@@ -6,6 +6,7 @@ for the Telegram bot interface.
 """
 
 import logging
+from typing import Optional
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
