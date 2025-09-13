@@ -339,7 +339,7 @@ def create_app() -> Flask:
             
             # Check if IP is local/private or excluded by config
             ip_excluded = is_local_ip(client_ip) or any(
-                client_ip.startswith(prefix) for prefix in config.rabbitmq_exclude_ips
+                client_ip.startswith(prefix) for prefix in config.exclude_ips
             )
             if ip_excluded:
                 logger.info(
@@ -409,7 +409,7 @@ def create_app() -> Flask:
             
             # Check if IP is local/private or excluded by config
             ip_excluded = is_local_ip(access_request.ip_address) or any(
-                str(access_request.ip_address or '').startswith(prefix) for prefix in config.rabbitmq_exclude_ips
+                str(access_request.ip_address or '').startswith(prefix) for prefix in config.exclude_ips
             )
             if ip_excluded:
                 logger.info(

@@ -194,11 +194,11 @@ async def handle_add_access(query, user_id: int, chat_id: int) -> None:
         
         # Inform user if IP is excluded from RabbitMQ publishing (always open policy)
         excluded_note = ""
-        if config.rabbitmq_exclude_ips:
+        if config.exclude_ips:
             excluded_note = (
                 "\n\n" + i18n.get_text(
                     "bot.excluded_ips_note",
-                    ips=", ".join(config.rabbitmq_exclude_ips)
+                    ips=", ".join(config.exclude_ips)
                 )
             )
         response_text = i18n.get_text("bot.access_link_created", link=access_url) + excluded_note
