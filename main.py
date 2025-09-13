@@ -59,6 +59,19 @@ class FABApplication:
             
             logger.info("Database initialized successfully")
             
+            # Add verification that database is working
+            logger.debug(f"Database instance: {self.database}")
+            logger.debug(f"Global db module: {db_module.db}")
+            
+            # Test database connection
+            try:
+                test_connection = db_module.db.get_connection()
+                test_connection.close()
+                logger.info("Database connection test passed")
+            except Exception as e:
+                logger.error(f"Database connection test failed: {e}")
+                raise
+            
             # Start RabbitMQ service (optional)
             if not rabbitmq_service.start():
                 if config.rabbitmq_enabled:
