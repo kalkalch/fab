@@ -11,9 +11,20 @@ import re
 import uuid
 import ipaddress
 from typing import Optional, Union
-from flask import Flask, request, render_template, jsonify, session, redirect, url_for
+from flask import (
+    Flask,
+    request,
+    render_template,
+    jsonify,
+    session,
+    redirect,
+    url_for,
+    send_file,
+)
 from werkzeug.serving import make_server
 import threading
+import base64
+from io import BytesIO
 
 from ..config import config
 from ..models import access as access_module
@@ -175,8 +186,19 @@ def create_app() -> Flask:
     
     @app.route("/favicon.ico")
     def favicon():
-        """Handle browser favicon request without hitting token route."""
-        return "", 204
+        """Serve a minimal embedded PNG favicon."""
+        # 1x1 transparent PNG
+        png_b64 = (
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8A"
+            "AwMB/aoZp5QAAAAASUVORK5CYII="
+        )
+        data = base64.b64decode(png_b64)
+        return send_file(
+            BytesIO(data),
+            mimetype="image/png",
+            as_attachment=False,
+            download_name="favicon.png",
+        )
 
     @app.route("/robots.txt")
     def robots():
