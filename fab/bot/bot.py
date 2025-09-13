@@ -124,8 +124,8 @@ class FABBot:
         """Start the bot with retry mechanism."""
         import asyncio
         
-        max_retries = 3
-        retry_delay = 5
+        max_retries = 5  # Increased for unreliable networks
+        retry_delay = 10  # Longer initial delay for network recovery
         
         for attempt in range(max_retries):
             try:
