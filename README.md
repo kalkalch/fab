@@ -494,3 +494,23 @@ Access events are always logged to stdout and optionally sent to RabbitMQ in JSO
 ## Русская версия
 
 Русская версия документации доступна в файле [README_RU.md](README_RU.md).
+
+
+## 🧪 Testing Rules
+
+### Mandatory Testing
+- ✅ After every code change: `python3 test_suite.py`
+- ✅ Before every commit: `./run_tests.sh`
+- ✅ Success Rate must be ≥ 99.5%
+- ✅ Update `test_suite.py` for new modules
+
+### Testing Commands
+```bash
+make test        # Full test suite
+make test-quick  # Quick check
+make test-docker # Docker test
+```
+
+### Test Categories  
+- 🔍 Syntax, 📦 Imports, 🧠 Logic, ⚙️ Config
+- 🗄️ Database, 📋 JSON, 🚀 Runtime, 🏗️ Classes
