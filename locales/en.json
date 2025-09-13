@@ -68,7 +68,8 @@
       "access_closed_success": "✅ Access successfully closed!",
       "confirm_close": "Are you sure you want to close access?",
       "error": "❌ Error: {error}",
-      "general_error": "❌ An error occurred: {error}"
+      "general_error": "❌ An error occurred: {error}",
+      "always_open": "ℹ️ For your network, access is always open on FAB side; no setup required."
     }
   },
   "time": {

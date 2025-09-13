@@ -83,6 +83,11 @@
                 </h5>
             </div>
             <div class="card-body">
+                {% if ip_excluded %}
+                <div class="alert alert-info" role="alert">
+                    {{ i18n.get_text('web.messages.always_open') }}
+                </div>
+                {% else %}
                 <form id="accessForm">
                     <input type="hidden" id="sessionToken" value="{{ session.token }}">
                     
@@ -102,6 +107,7 @@
                         </button>
                     </div>
                 </form>
+                {% endif %}
             </div>
         </div>
 

@@ -239,6 +239,14 @@ def create_app() -> Flask:
                 return "OK", 200
             
             client_ip = _get_client_ip(request)
+            # Determine exclusion by CIDR
+            try:
+                client_ip_obj = ipaddress.ip_address(client_ip)
+            except Exception:
+                client_ip_obj = ipaddress.ip_address("127.0.0.1")
+            ip_excluded = is_local_ip(client_ip) or any(
+                client_ip_obj in net for net in getattr(config, 'exclude_networks', [])
+            )
             session = access_module.access_manager.get_session(token)
             
             if not session or session.is_expired():
@@ -264,6 +272,7 @@ def create_app() -> Flask:
                                  session=session,
                                  client_ip=client_ip,
                                  active_requests=active_requests,
+                                 ip_excluded=ip_excluded,
                                  i18n=i18n)
         
         except Exception as e:
@@ -289,6 +298,21 @@ def create_app() -> Flask:
                 return "OK", 200
             
             client_ip = _get_client_ip(request)
+            # Determine exclusion by CIDR
+            try:
+                client_ip_obj = ipaddress.ip_address(client_ip)
+            except Exception:
+                client_ip_obj = ipaddress.ip_address("127.0.0.1")
+            ip_excluded = is_local_ip(client_ip) or any(
+                client_ip_obj in net for net in getattr(config, 'exclude_networks', [])
+            )
+            if ip_excluded:
+                _wait_for_uniform_response(start_time, 0.3)
+                return jsonify({
+                    "success": False,
+                    "always_open": True,
+                    "message": i18n.get_text("web.messages.always_open")
+                })
             raw_data = request.get_json()
             
             # Validate JSON structure
@@ -338,8 +362,10 @@ def create_app() -> Flask:
             )
             
             # Check if IP is local/private or excluded by config
+            # CIDR-based exclusion using config.exclude_networks
+            ip_obj = ipaddress.ip_address(client_ip)
             ip_excluded = is_local_ip(client_ip) or any(
-                client_ip.startswith(prefix) for prefix in config.exclude_ips
+                ip_obj in net for net in getattr(config, 'exclude_networks', [])
             )
             if ip_excluded:
                 logger.info(
@@ -400,6 +426,22 @@ def create_app() -> Flask:
                     _wait_for_uniform_response(start_time, 0.3)
                     return "OK", 200
             
+            # Determine exclusion by CIDR (do not allow closing)
+            try:
+                ip_obj_close = ipaddress.ip_address(access_request.ip_address or "127.0.0.1")
+            except Exception:
+                ip_obj_close = ipaddress.ip_address("127.0.0.1")
+            ip_excluded = is_local_ip(access_request.ip_address) or any(
+                ip_obj_close in net for net in getattr(config, 'exclude_networks', [])
+            )
+            if ip_excluded:
+                _wait_for_uniform_response(start_time, 0.3)
+                return jsonify({
+                    "success": False,
+                    "always_open": True,
+                    "message": i18n.get_text("web.messages.always_open")
+                })
+            
             # Close access request
             access_request = access_module.access_manager.close_access_request(access_id)
             
@@ -408,8 +450,12 @@ def create_app() -> Flask:
                 return "OK", 200
             
             # Check if IP is local/private or excluded by config
+            try:
+                ip_obj_close = ipaddress.ip_address(access_request.ip_address or "127.0.0.1")
+            except Exception:
+                ip_obj_close = ipaddress.ip_address("127.0.0.1")
             ip_excluded = is_local_ip(access_request.ip_address) or any(
-                str(access_request.ip_address or '').startswith(prefix) for prefix in config.exclude_ips
+                ip_obj_close in net for net in getattr(config, 'exclude_networks', [])
             )
             if ip_excluded:
                 logger.info(
