@@ -439,12 +439,18 @@ def create_app() -> Flask:
                 if not _validate_token(token):
                     logger.warning(f"Invalid token format in close_access: {token[:8]}...")
                     _wait_for_uniform_response(start_time, 0.3)
-                    return "OK", 200
+                    return jsonify({"success": False, "error": "Invalid token"})
                     
                 session = access_module.access_manager.get_session(token)
                 if not session or session.is_expired():
                     _wait_for_uniform_response(start_time, 0.3)
-                    return "OK", 200
+                    return jsonify({"success": False, "error": "Session not found or expired"})
+            
+            # Fetch access request now (needed for IP and close)
+            access_request = access_module.access_manager.get_access_request(access_id)
+            if not access_request:
+                _wait_for_uniform_response(start_time, 0.3)
+                return jsonify({"success": True})
             
             # Determine exclusion by CIDR (do not allow closing)
             try:
@@ -467,7 +473,7 @@ def create_app() -> Flask:
             
             if not access_request:
                 _wait_for_uniform_response(start_time, 0.3)
-                return "OK", 200
+                return jsonify({"success": True})
             
             # Check if IP is local/private or excluded by config
             try:
@@ -496,7 +502,7 @@ def create_app() -> Flask:
         except Exception as e:
             logger.error(f"Error closing access: {e}")
             _wait_for_uniform_response(start_time, 0.3)
-            return "OK", 200
+            return jsonify({"success": False, "error": str(e)})
     
     @app.route("/s/<access_id>")
     def access_status(access_id: str):
