@@ -12,14 +12,14 @@ from dataclasses import dataclass
 from typing import Optional, List
 from enum import Enum
 
-from .database import db
+from . import database as database_module
 
 
 def _get_db():
     """Get database instance with proper error handling."""
-    if db is None:
+    if database_module.db is None:
         raise RuntimeError("Database not initialized. Call Database() in main.py first.")
-    return db
+    return database_module.db
 
 logger = logging.getLogger(__name__)
 
