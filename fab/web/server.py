@@ -231,12 +231,12 @@ def create_app() -> Flask:
             if not _validate_token(token):
                 logger.warning(f"Invalid token format in access_page: {token[:8]}...")
                 _wait_for_uniform_response(start_time, 0.5)
-                return "OK", 200
+                return jsonify({"success": False, "error": "Invalid token"})
                 
             if not _validate_ip_headers(request):
                 logger.warning("Invalid IP headers detected in access_page")
                 _wait_for_uniform_response(start_time, 0.5)
-                return "OK", 200
+                return jsonify({"success": False, "error": "Invalid headers"})
             
             client_ip = _get_client_ip(request)
             # Determine exclusion by CIDR
@@ -250,9 +250,8 @@ def create_app() -> Flask:
             session = access_module.access_manager.get_session(token)
             
             if not session or session.is_expired():
-                # Wait for uniform response time
                 _wait_for_uniform_response(start_time, 0.5)
-                return "OK", 200
+                return jsonify({"success": False, "error": "Session not found or expired"})
             
             # Get user's preferred language (from session or auto-detect)
             language = get_web_user_language()
@@ -290,12 +289,12 @@ def create_app() -> Flask:
             if not _validate_token(token):
                 logger.warning(f"Invalid token format in open_access: {token[:8]}...")
                 _wait_for_uniform_response(start_time, 0.3)
-                return "OK", 200
+                return jsonify({"success": False, "error": "Invalid token"})
                 
             if not _validate_ip_headers(request):
                 logger.warning("Invalid IP headers detected in open_access")
                 _wait_for_uniform_response(start_time, 0.3)
-                return "OK", 200
+                return jsonify({"success": False, "error": "Invalid headers"})
             
             client_ip = _get_client_ip(request)
             # Determine exclusion by CIDR
@@ -320,32 +319,38 @@ def create_app() -> Flask:
             if not data or "duration" not in data:
                 logger.warning(f"Invalid JSON data in open_access from IP {client_ip}")
                 _wait_for_uniform_response(start_time, 0.3)
-                return "OK", 200
+                return jsonify({"success": False, "error": "Invalid payload"})
             
             # Strict duration validation
             duration = _validate_duration(data["duration"])
             if duration is None:
                 logger.warning(f"Invalid duration in open_access from IP {client_ip}: {data.get('duration')}")
                 _wait_for_uniform_response(start_time, 0.3)
-                return "OK", 200
+                return jsonify({"success": False, "error": "Invalid duration"})
             
             session = access_module.access_manager.get_session(token)
             
             if not session or session.is_expired():
                 _wait_for_uniform_response(start_time, 0.3)
-                return "OK", 200
+                return jsonify({"success": False, "error": "Session not found or expired"})
             
-            # Check if session was already used (prevent reuse)
+            # Session use/reuse logic: allow repeated open from same IP
             if session.used:
-                logger.warning(f"Attempt to reuse already used session {token[:8]}... from IP {client_ip}")
-                _wait_for_uniform_response(start_time, 0.3)
-                return "OK", 200
-            
-            # Mark session as used atomically
-            if not session.use_atomic(client_ip):
-                logger.warning(f"Failed to use session {token[:8]}... - already used by another request")
-                _wait_for_uniform_response(start_time, 0.3)
-                return "OK", 200
+                if session.ip_address and session.ip_address == client_ip:
+                    logger.info(f"Reusing session {token[:8]} from same IP {client_ip}")
+                else:
+                    logger.warning(f"Attempt to reuse already used session {token[:8]}... from IP {client_ip}")
+                    _wait_for_uniform_response(start_time, 0.3)
+                    return jsonify({"success": False, "error": "Session already used"})
+            else:
+                if not session.use_atomic(client_ip):
+                    # If another thread used it, allow if same IP
+                    if session.ip_address == client_ip:
+                        logger.info(f"Reusing session {token[:8]} after race from same IP {client_ip}")
+                    else:
+                        logger.warning(f"Failed to use session {token[:8]} - race and different IP")
+                        _wait_for_uniform_response(start_time, 0.3)
+                        return jsonify({"success": False, "error": "Session already used"})
             
             # Ensure access_manager is initialized
             if access_module.access_manager is None:
@@ -405,13 +410,13 @@ def create_app() -> Flask:
                 "expires_at": access_request.expires_at.isoformat() if access_request.expires_at else None
             })
         
-        except ValueError:
+        except ValueError as ve:
             _wait_for_uniform_response(start_time, 0.3)
-            return "OK", 200
+            return jsonify({"success": False, "error": str(ve)})
         except Exception as e:
             logger.error(f"Error opening access: {e}")
             _wait_for_uniform_response(start_time, 0.3)
-            return "OK", 200
+            return jsonify({"success": False, "error": str(e)})
     
     @app.route("/c/<access_id>", methods=["POST"])
     def close_access(access_id: str):
