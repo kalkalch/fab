@@ -31,9 +31,11 @@ def is_user_authorized(user) -> bool:
     
     try:
         return db_manager.is_user_authorized(user.id)
-    except RuntimeError as e:
-        if "Database not initialized" in str(e):
-            logger.warning("Database not ready yet, denying access temporarily")
+    except Exception as e:
+        msg = str(e).lower()
+        # Graceful degradation on startup or transient DB issues
+        if "database not initialized" in msg or "closed database" in msg:
+            logger.warning("Database temporarily unavailable, denying access temporarily")
             return False
         raise
 

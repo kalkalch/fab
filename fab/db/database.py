@@ -58,6 +58,16 @@ class Database:
             self._local.connection.row_factory = sqlite3.Row
             
         return self._local.connection
+
+    def _reset_connection(self) -> sqlite3.Connection:
+        """Force reset the thread-local connection (e.g., after 'closed database' errors)."""
+        if hasattr(self._local, 'connection'):
+            try:
+                self._local.connection.close()
+            except Exception:
+                pass
+            delattr(self._local, 'connection')
+        return self._get_connection()
     
     @contextmanager
     def transaction(self):
@@ -77,8 +87,25 @@ class Database:
             cursor = conn.execute(sql, params)
             conn.commit()
             return cursor
+        except sqlite3.ProgrammingError as e:
+            # Attempt to recover from 'closed database'
+            if "closed" in str(e).lower():
+                logger.warning("SQLite connection closed unexpectedly. Recreating connection and retrying once.")
+                conn = self._reset_connection()
+                cursor = conn.execute(sql, params)
+                conn.commit()
+                return cursor
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            logger.error(f"Database programming error executing query: {sql[:100]}... Error: {e}")
+            raise
         except Exception as e:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             logger.error(f"Database error executing query: {sql[:100]}... Error: {e}")
             raise
     
