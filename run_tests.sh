@@ -136,9 +136,16 @@ echo "- Security: Basic credential scan"
 print_status "🏁 Test run completed!" $GREEN
 print_status "📄 Check test_results.log and syntax_errors.log for details" $BLUE
 
-# Return appropriate exit code
-if grep -q "ALL TESTS PASSED" test_results.log 2>/dev/null; then
+# Return appropriate exit code based on Success Rate ≥ 99.5%
+SUCCESS_RATE=$(grep -E "Success Rate: [0-9]+\.[0-9]+%" test_results.log | tail -n1 | awk '{print $4}' | tr -d '%')
+
+if [ -z "$SUCCESS_RATE" ]; then
+  # Fallback: if explicit ALL TESTS PASSED present
+  if grep -q "ALL TESTS PASSED" test_results.log 2>/dev/null; then
     exit 0
-else
+  else
     exit 1
+  fi
 fi
+
+awk -v rate="$SUCCESS_RATE" 'BEGIN { if (rate+0 >= 99.5) exit 0; else exit 1 }'

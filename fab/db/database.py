@@ -48,6 +48,13 @@ class Database:
             )
             # Enable foreign keys and row factory
             self._local.connection.execute("PRAGMA foreign_keys = ON")
+            # Improve durability and concurrency
+            try:
+                self._local.connection.execute("PRAGMA journal_mode = WAL")
+                self._local.connection.execute("PRAGMA synchronous = NORMAL")
+            except Exception:
+                # Some SQLite builds may not support all PRAGMAs
+                logger.debug("SQLite PRAGMA tuning not fully supported on this build")
             self._local.connection.row_factory = sqlite3.Row
             
         return self._local.connection

@@ -1,5 +1,6 @@
 """
-Web server module for FABких 
+Web server module for FAB.
+
 Flask-based HTTP server for handling web interface requests,
 access management, and dynamic link processing.
 """
@@ -170,6 +171,11 @@ def create_app() -> Flask:
     @app.route("/")
     def index():
         """Return neutral response for root access."""
+        return "OK", 200
+    
+    @app.route("/health")
+    def health():
+        """Healthcheck endpoint for load balancers and monitors."""
         return "OK", 200
     
     @app.route("/set_language/<lang>")
