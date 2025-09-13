@@ -67,3 +67,16 @@ help: ## Show available commands
 	@echo "FAB - Firewall Access Bot (Docker-only)"
 	@echo
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
+
+test: ## Run comprehensive test suite
+	@echo "🧪 Running comprehensive test suite..."
+	@./run_tests.sh
+
+test-quick: ## Quick syntax and import check  
+	@echo "⚡ Running quick tests..."
+	@python3 test_suite.py
+
+test-docker: ## Test in Docker environment
+	@echo "🐳 Testing in Docker environment..."
+	@docker build -t fab-test .
+	@docker run --rm -e TELEGRAM_BOT_TOKEN=test_token -e ADMIN_TELEGRAM_IDS=123 -e SITE_URL=http://test fab-test python3 test_suite.py
