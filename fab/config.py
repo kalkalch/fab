@@ -70,6 +70,11 @@ class Config:
             self.rabbitmq_exchange_type: str = os.getenv("RABBITMQ_EXCHANGE_TYPE", "direct")
             self.rabbitmq_routing_key: str = os.getenv("RABBITMQ_ROUTING_KEY", "firewall.access")
             self.rabbitmq_queue_type: str = os.getenv("RABBITMQ_QUEUE_TYPE", "classic")
+            # Comma-separated list of IPs/CIDR ranges to exclude from RabbitMQ
+            exclude_ips = os.getenv("RABBITMQ_EXCLUDE_IPS", "")
+            self.rabbitmq_exclude_ips: list[str] = [
+                ip.strip() for ip in exclude_ips.split(',') if ip.strip()
+            ]
         else:
             # Set defaults when disabled (won't be used, but safe values)
             self.rabbitmq_host: str = ""
@@ -82,6 +87,7 @@ class Config:
             self.rabbitmq_exchange_type: str = "direct"
             self.rabbitmq_routing_key: str = ""
             self.rabbitmq_queue_type: str = "classic"
+            self.rabbitmq_exclude_ips: list[str] = []
         
         # Security Configuration
         self.secret_key: str = os.getenv("SECRET_KEY", self._generate_secret_key())

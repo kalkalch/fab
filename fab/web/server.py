@@ -315,9 +315,15 @@ def create_app() -> Flask:
                 ip_address=client_ip
             )
             
-            # Check if IP is local/private
-            if is_local_ip(client_ip):
-                logger.info(f"Access opened for user {session.telegram_user_id}, local IP: {client_ip}, duration: {duration}s - RabbitMQ message skipped")
+            # Check if IP is local/private or excluded by config
+            ip_excluded = is_local_ip(client_ip) or any(
+                client_ip.startswith(prefix) for prefix in config.rabbitmq_exclude_ips
+            )
+            if ip_excluded:
+                logger.info(
+                    f"Access opened for user {session.telegram_user_id}, IP: {client_ip}, "
+                    f"duration: {duration}s - RabbitMQ message skipped (excluded)"
+                )
             else:
                 # Send message to RabbitMQ for external IPs only
                 message = access_request.to_rabbitmq_message()
@@ -379,9 +385,14 @@ def create_app() -> Flask:
                 _wait_for_uniform_response(start_time, 0.3)
                 return "OK", 200
             
-            # Check if IP is local/private
-            if is_local_ip(access_request.ip_address):
-                logger.info(f"Access closed for request {access_request.id}, local IP: {access_request.ip_address} - RabbitMQ message skipped")
+            # Check if IP is local/private or excluded by config
+            ip_excluded = is_local_ip(access_request.ip_address) or any(
+                str(access_request.ip_address or '').startswith(prefix) for prefix in config.rabbitmq_exclude_ips
+            )
+            if ip_excluded:
+                logger.info(
+                    f"Access closed for request {access_request.id}, IP: {access_request.ip_address} - RabbitMQ message skipped (excluded)"
+                )
             else:
                 # Send message to RabbitMQ for external IPs only
                 message = access_request.to_rabbitmq_message()
