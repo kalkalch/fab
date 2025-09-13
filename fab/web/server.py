@@ -353,6 +353,26 @@ def create_app() -> Flask:
                 _wait_for_uniform_response(start_time, 0.3)
                 return "OK", 200
             
+            # Close any previous active requests for this user (no RabbitMQ 'close' publish)
+            try:
+                prev_active = access_module.access_manager.get_active_requests_for_user(
+                    session.telegram_user_id
+                )
+                if prev_active:
+                    # Close all active; the consumer side will treat new 'open' as refresh
+                    for prev in prev_active:
+                        try:
+                            prev.close()
+                            logger.info(
+                                f"Closed previous active access {prev.id} for user {session.telegram_user_id}"
+                            )
+                        except Exception as ce:
+                            logger.warning(
+                                f"Failed to close previous access {getattr(prev, 'id', '?')}: {ce}"
+                            )
+            except Exception as e_close_list:
+                logger.warning(f"Failed to fetch/close previous active accesses: {e_close_list}")
+
             # Create access request
             access_request = access_module.access_manager.create_access_request(
                 telegram_user_id=session.telegram_user_id,

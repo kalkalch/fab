@@ -8,6 +8,7 @@ application configuration settings.
 import os
 import logging
 from pathlib import Path
+from ipaddress import ip_network
 
 try:
     from dotenv import load_dotenv
@@ -83,13 +84,21 @@ class Config:
             self.rabbitmq_routing_key: str = ""
             self.rabbitmq_queue_type: str = "classic"
             
-        # Global exclude IPs (always-open policy)
-        # Default prefixes are Telegram servers currently filtered in code
-        default_excludes = "149.154.167.,149.154.175.,91.108.4.,91.108.56.,91.108.8."
+        # Global exclude IPs (always-open policy) as CIDR
+        # Default: standard private/link-local/test ranges
+        default_excludes = (
+            "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,"
+            "127.0.0.0/8,169.254.0.0/16,192.0.2.0/24,198.51.100.0/24,203.0.113.0/24"
+        )
         exclude_ips = os.getenv("EXCLUDE_IPS", default_excludes)
-        self.exclude_ips: list[str] = [
-            ip.strip() for ip in exclude_ips.split(',') if ip.strip()
-        ]
+        self.exclude_ips: list[str] = [ip.strip() for ip in exclude_ips.split(',') if ip.strip()]
+        # Parsed networks for fast checks
+        self.exclude_networks = []
+        for cidr in self.exclude_ips:
+            try:
+                self.exclude_networks.append(ip_network(cidr, strict=False))
+            except Exception:
+                logging.warning(f"Invalid EXCLUDE_IPS entry skipped: {cidr}")
         
         # Security Configuration
         self.secret_key: str = os.getenv("SECRET_KEY", self._generate_secret_key())
