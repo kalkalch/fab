@@ -6,6 +6,7 @@ Handles message publishing to RabbitMQ queue for firewall access events.
 
 import json
 import logging
+from typing import Optional, Dict, Any
 
 try:
     import pika
