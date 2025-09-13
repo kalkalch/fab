@@ -173,6 +173,16 @@ def create_app() -> Flask:
         """Return neutral response for root access."""
         return "OK", 200
     
+    @app.route("/favicon.ico")
+    def favicon():
+        """Handle browser favicon request without hitting token route."""
+        return "", 204
+
+    @app.route("/robots.txt")
+    def robots():
+        """Handle robots.txt request without warnings."""
+        return "User-agent: *\nDisallow: /\n", 200, {"Content-Type": "text/plain; charset=utf-8"}
+
     @app.route("/health")
     def health():
         """Healthcheck endpoint for load balancers and monitors."""
