@@ -9,7 +9,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class I18n:
         """Get current language."""
         return self.current_language
     
-    def detect_language_from_code(self, language_code: str | None) -> str:
+    def detect_language_from_code(self, language_code: Optional[str] = None) -> str:
         """Detect language from Telegram language code."""
         if not language_code:
             return self.default_language
@@ -86,7 +86,7 @@ class I18n:
         else:
             return "en"  # Default to English for all other languages
     
-    def detect_language_from_header(self, accept_language: str | None) -> str:
+    def detect_language_from_header(self, accept_language: Optional[str] = None) -> str:
         """Detect language from Accept-Language header."""
         if not accept_language:
             return self.default_language
@@ -105,7 +105,7 @@ class I18n:
         # Return first supported language or default
         return languages[0] if languages else self.default_language
     
-    def get_text(self, key: str, language: str | None = None, **kwargs) -> str:
+    def get_text(self, key: str, language: Optional[str] = None, **kwargs) -> str:
         """
         Get translated text by key.
         
@@ -156,7 +156,7 @@ class I18n:
         except (KeyError, TypeError):
             return None
     
-    def format_duration(self, hours: int, language: str | None = None) -> str:
+    def format_duration(self, hours: int, language: Optional[str] = None) -> str:
         """Format duration with proper grammar for the language."""
         if language is None:
             language = self.current_language
@@ -174,7 +174,7 @@ class I18n:
             else:
                 return f"{hours} hours"
     
-    def format_remaining_time(self, remaining_seconds: int, language: str | None = None) -> str:
+    def format_remaining_time(self, remaining_seconds: int, language: Optional[str] = None) -> str:
         """Format remaining time with proper grammar for the language."""
         if language is None:
             language = self.current_language

@@ -18,7 +18,7 @@ from ..db.manager import db_manager
 logger = logging.getLogger(__name__)
 
 
-def get_user_language(user_id: int, user_language_code: str | None) -> str:
+def get_user_language(user_id: int, user_language_code: Optional[str]) -> str:
     """Get user's preferred language - just auto-detect from Telegram for now."""
     return i18n.detect_language_from_code(user_language_code)
 
@@ -246,8 +246,8 @@ async def handle_my_access(query, user_id: int) -> None:
                 time_left = ""
                 expires_text = ""
                 if request.expires_at:
-                    from datetime import datetime
-                    now = datetime.now()
+                    from datetime import datetime, timezone
+                    now = datetime.now(timezone.utc)
                     remaining_seconds = int((request.expires_at - now).total_seconds())
                     
                     if remaining_seconds > 0:

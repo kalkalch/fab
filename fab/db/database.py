@@ -34,6 +34,10 @@ class Database:
         """Ensure database directory exists."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
     
+    def get_connection(self) -> sqlite3.Connection:
+        """Get database connection (public method for testing)."""
+        return self._get_connection()
+    
     def _get_connection(self) -> sqlite3.Connection:
         """Get thread-local database connection."""
         if not hasattr(self._local, 'connection'):

@@ -1,6 +1,5 @@
 """
-Web server module for FAB.
-
+Web server module for FABких 
 Flask-based HTTP server for handling web interface requests,
 access management, and dynamic link processing.
 """
@@ -59,7 +58,7 @@ def _validate_token(token: str) -> bool:
     return True
 
 
-def _validate_duration(duration: any) -> int | None:
+def _validate_duration(duration: any) -> Optional[int]:
     """Validate duration value with strict security checks."""
     try:
         # Convert to integer
@@ -82,7 +81,7 @@ def _validate_duration(duration: any) -> int | None:
         return None
 
 
-def _validate_json_data(data: any) -> dict | None:
+def _validate_json_data(data: any) -> Optional[dict]:
     """Validate JSON data structure."""
     if not isinstance(data, dict):
         logger.warning(f"Invalid JSON data type: {type(data).__name__}")

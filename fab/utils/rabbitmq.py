@@ -26,7 +26,7 @@ class RabbitMQPublisher:
     
     def __init__(self) -> None:
         """Initialize RabbitMQ publisher."""
-        self._connection: BlockingConnection | None = None
+        self._connection: Optional[BlockingConnection] = None
         self._channel = None
         
     def connect(self) -> bool:
