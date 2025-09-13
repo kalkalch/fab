@@ -250,6 +250,17 @@ RABBITMQ_QUEUE_TYPE=classic
 
 **Note**: The application works without RabbitMQ - set `RABBITMQ_ENABLED=false` to run without message queue. All access events will still be logged to stdout.
 
+### RabbitMQ Connection Architecture
+
+FAB uses **persistent connections** to RabbitMQ for optimal performance:
+
+- **Persistent Connection**: Connection established at startup and maintained continuously
+- **Keep-Alive Thread**: Background thread monitors connection health every 15 seconds
+- **Auto-Reconnection**: Automatic reconnection with exponential backoff (5s → 10s → 20s → 40s → 60s)
+- **Thread-Safe**: All operations protected with `threading.RLock()`
+- **Heartbeat**: 30 seconds for fast connection failure detection
+- **Health Monitoring**: Connection status available via `/health` endpoint
+
 ### RabbitMQ Queue Types
 
 FAB supports two types of RabbitMQ queues:

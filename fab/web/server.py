@@ -220,7 +220,30 @@ def create_app() -> Flask:
     @app.route("/health")
     def health():
         """Healthcheck endpoint for load balancers and monitors."""
-        return "OK", 200
+        try:
+            # Check RabbitMQ health if enabled
+            rabbitmq_status = rabbitmq_service.get_status()
+            
+            health_data = {
+                "status": "healthy",
+                "timestamp": time.time(),
+                "rabbitmq": rabbitmq_status
+            }
+            
+            # If RabbitMQ is enabled but not connected, mark as degraded
+            if rabbitmq_status["enabled"] and not rabbitmq_status.get("connected", False):
+                health_data["status"] = "degraded"
+                health_data["warnings"] = ["RabbitMQ connection unavailable"]
+            
+            return jsonify(health_data), 200
+            
+        except Exception as e:
+            logger.error(f"Health check error: {e}")
+            return jsonify({
+                "status": "unhealthy",
+                "timestamp": time.time(),
+                "error": str(e)
+            }), 503
     
     @app.route("/set_language/<lang>")
     def set_language(lang: str):

@@ -353,6 +353,30 @@ class FABTestSuite:
             self.passed_tests += 1
             self.total_tests += 1
             
+            # Test RabbitMQ service (without actual connection)
+            from fab.utils.rabbitmq import RabbitMQService
+            rabbitmq_service = RabbitMQService()
+            
+            # Test persistent connection features
+            publisher = rabbitmq_service.publisher
+            required_attrs = [
+                '_connection_lock', '_keep_alive_running',
+                '_reconnect_attempts', '_max_reconnect_attempts'
+            ]
+            
+            for attr in required_attrs:
+                if not hasattr(publisher, attr):
+                    raise AttributeError(f"RabbitMQ publisher missing '{attr}' for persistent connections")
+            
+            # Test new methods
+            required_methods = ['is_connected', 'get_connection_info', 'health_check', 'get_status']
+            for method in required_methods:
+                if not hasattr(rabbitmq_service, method) and not hasattr(publisher, method):
+                    raise AttributeError(f"RabbitMQ missing method '{method}'")
+            
+            self.passed_tests += 1
+            self.total_tests += 1
+            
         except Exception as e:
             error_msg = f"Class initialization failed: {e}"
             self.results['runtime_errors'].append(error_msg)
