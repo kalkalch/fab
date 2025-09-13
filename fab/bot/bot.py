@@ -106,8 +106,8 @@ class FABBot:
         logger.error("Full error traceback:")
         logger.error(''.join(traceback.format_exception(type(error), error, error.__traceback__)))
     
-    async def _polling_error_callback(self, error):
-        """Handle polling errors during runtime."""
+    def _polling_error_callback(self, error):
+        """Handle polling errors during runtime. NOTE: Must be sync function!"""
         if isinstance(error, NetworkError):
             if "bad gateway" in str(error).lower() or "502" in str(error):
                 logger.warning("Polling: Bad Gateway (502) - Telegram servers overloaded")
@@ -131,13 +131,16 @@ class FABBot:
             try:
                 logger.info(f"Starting FAB Telegram bot... (attempt {attempt + 1}/{max_retries})")
                 
-                # Initialize application
-                logger.debug("Initializing bot application...")
-                await self.application.initialize()
-                
-                # Start application  
-                logger.debug("Starting bot application...")
-                await self.application.start()
+                # Initialize application (only if not already initialized)
+                if not self.application.running:
+                    logger.debug("Initializing bot application...")
+                    await self.application.initialize()
+                    
+                    # Start application  
+                    logger.debug("Starting bot application...")
+                    await self.application.start()
+                else:
+                    logger.debug("Application already running, skipping initialization")
                 
                 # Test connection by getting bot info
                 logger.debug("Testing connection to Telegram API...")
@@ -149,19 +152,22 @@ class FABBot:
                 logger.info(f"Bot connected successfully: @{bot_info.username} (ID: {bot_info.id})")
                 logger.info(f"Connection established in {connection_time:.2f} seconds")
                 
-                # Start polling with settings optimized for slow networks
-                logger.debug("Starting polling for updates...")
-                await self.application.updater.start_polling(
-                    drop_pending_updates=True,
-                    timeout=40,           # Near maximum for fewer requests
-                    bootstrap_retries=7,  # More retries for unreliable networks
-                    read_timeout=80,      # Increased for slow networks (40s timeout + 40s buffer)
-                    write_timeout=45,     # Increased from 30s
-                    connect_timeout=30,   # Increased from 15s for high latency
-                    pool_timeout=20,      # Increased from 10s
-                    allowed_updates=["message", "callback_query"],  # Only needed updates
-                    error_callback=self._polling_error_callback
-                )
+                # Start polling with settings optimized for slow networks  
+                if not self.application.updater.running:
+                    logger.debug("Starting polling for updates...")
+                    await self.application.updater.start_polling(
+                        drop_pending_updates=True,
+                        timeout=40,           # Near maximum for fewer requests
+                        bootstrap_retries=7,  # More retries for unreliable networks
+                        read_timeout=80,      # Increased for slow networks (40s timeout + 40s buffer)
+                        write_timeout=45,     # Increased from 30s
+                        connect_timeout=30,   # Increased from 15s for high latency
+                        pool_timeout=20,      # Increased from 10s
+                        allowed_updates=["message", "callback_query"],  # Only needed updates
+                        error_callback=self._polling_error_callback
+                    )
+                else:
+                    logger.debug("Updater already running, skipping polling start")
                 logger.info("Bot is now polling for updates")
                 
                 return  # Success - exit retry loop
