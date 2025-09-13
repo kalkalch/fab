@@ -63,7 +63,11 @@ class FABTestSuite:
             self.test_runtime_imports,
             self.test_class_initialization,
             self.test_method_signatures,
-            self.test_environment_variables
+            self.test_environment_variables,
+            # Web API behavioral tests
+            self.test_web_open_returns_json,
+            self.test_web_repeat_open_from_same_ip,
+            self.test_web_close_returns_json
         ]
         
         for test_method in test_methods:
@@ -354,6 +358,119 @@ class FABTestSuite:
             self.results['runtime_errors'].append(error_msg)
             self.total_tests += 1
             logger.error(f"❌ {error_msg}")
+
+    # --------------------
+    # Web API tests
+    # --------------------
+    def _setup_in_memory_db(self):
+        """Initialize in-memory database and access manager for web tests."""
+        # Ensure env uses in-memory DB
+        os.environ['DATABASE_PATH'] = ':memory:'
+        try:
+            from fab.db.database import Database
+            from fab.db import database as db_module
+            from fab.models import access as access_module
+            db_module.db = Database(':memory:')
+            # Initialize access manager after db ready
+            access_module._initialize_access_manager()
+            return True
+        except Exception as e:
+            self.results['runtime_errors'].append(f"setup_in_memory_db: {e}")
+            logger.error(f"❌ DB setup failed: {e}")
+            return False
+
+    def _create_app(self):
+        from fab.web.server import create_app
+        return create_app()
+
+    def test_web_open_returns_json(self):
+        """Open endpoint must return JSON even on invalid token."""
+        try:
+            if not self._setup_in_memory_db():
+                return
+            app = self._create_app()
+            client = app.test_client()
+            # Invalid token (not UUID v4)
+            resp = client.post('/a/not-a-uuid', json={'duration': 3600}, headers={
+                'X-Real-IP': '1.2.3.4'
+            })
+            self.total_tests += 1
+            try:
+                data = resp.get_json()
+            except Exception:
+                data = None
+            if resp.status_code == 200 and isinstance(data, dict):
+                self.passed_tests += 1
+            else:
+                self.results['runtime_errors'].append('open_returns_json: response not JSON')
+        except Exception as e:
+            self.results['runtime_errors'].append(f"test_web_open_returns_json: {e}")
+
+    def test_web_repeat_open_from_same_ip(self):
+        """Repeat open with same token and IP should create new access and leave only one active."""
+        try:
+            if not self._setup_in_memory_db():
+                return
+            # Create session
+            from fab.models import access as access_module
+            from fab.config import config
+            app = self._create_app()
+            client = app.test_client()
+            session = access_module.access_manager.create_session(
+                telegram_user_id=1111, chat_id=2222, expiry_seconds=3600
+            )
+            # First open
+            r1 = client.post(f"/a/{session.token}", json={'duration': 3600}, headers={'X-Real-IP': '1.2.3.4'})
+            d1 = r1.get_json() or {}
+            # Second open (same token, same IP, different duration)
+            r2 = client.post(f"/a/{session.token}", json={'duration': 10800}, headers={'X-Real-IP': '1.2.3.4'})
+            d2 = r2.get_json() or {}
+            # Validate
+            self.total_tests += 1
+            ok = (r1.status_code == 200 and d1.get('success') is True and
+                  r2.status_code == 200 and d2.get('success') is True)
+            if ok:
+                # Ensure only one active remains
+                actives = access_module.access_manager.get_active_requests_for_user(1111)
+                only_one = len(actives) == 1
+                self.total_tests += 1
+                if only_one:
+                    self.passed_tests += 2
+                else:
+                    self.results['logic_errors'].append('repeat_open: more than one active request remains')
+            else:
+                self.results['runtime_errors'].append('repeat_open: open did not succeed twice')
+        except Exception as e:
+            self.results['runtime_errors'].append(f"test_web_repeat_open_from_same_ip: {e}")
+
+    def test_web_close_returns_json(self):
+        """Close endpoint must return JSON and mark request closed."""
+        try:
+            if not self._setup_in_memory_db():
+                return
+            from fab.models import access as access_module
+            app = self._create_app()
+            client = app.test_client()
+            session = access_module.access_manager.create_session(
+                telegram_user_id=3333, chat_id=4444, expiry_seconds=3600
+            )
+            r_open = client.post(f"/a/{session.token}", json={'duration': 3600}, headers={'X-Real-IP': '5.6.7.8'})
+            d_open = r_open.get_json() or {}
+            access_id = d_open.get('access_id')
+            self.total_tests += 1
+            if not access_id:
+                self.results['runtime_errors'].append('close_returns_json: open did not return access_id')
+                return
+            r_close = client.post(f"/c/{access_id}", json={'token': session.token}, headers={'X-Real-IP': '5.6.7.8'})
+            d_close = r_close.get_json() or {}
+            ok = (r_close.status_code == 200 and d_close.get('success') is True)
+            self.total_tests += 1
+            if ok:
+                self.passed_tests += 2
+            else:
+                self.results['runtime_errors'].append('close_returns_json: close did not return success')
+        except Exception as e:
+            self.results['runtime_errors'].append(f"test_web_close_returns_json: {e}")
     
     def test_method_signatures(self):
         """Test that method signatures are consistent."""
