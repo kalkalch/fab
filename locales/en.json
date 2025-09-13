@@ -11,6 +11,7 @@
     "my_accesses": "📋 My Accesses", 
     "help": "❓ Help",
     "access_link_created": "✅ Access link created!\n\n🔗 Click the link to configure access:\n{link}\n\n⏱ Link expires in 1 hour.",
+    "excluded_ips_note": "ℹ️ Note: For networks/addresses [{ips}] access is always open and doesn't require setup. Messages for these addresses are not sent to external systems.",
     "no_active_accesses": "📝 No active accesses found.\n\nYou don't have any open firewall accesses at the moment.",
     "active_accesses_title": "🟢 Your active accesses:",
     "access_opened": "Access opened for {hours}",
