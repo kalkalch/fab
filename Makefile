@@ -21,7 +21,7 @@ start: build ## Build and start container
 		docker run -d --name $(CONTAINER_NAME) -p $(PORT):8080 -v fab-data:/app/data --env-file .env $(IMAGE_NAME); \
 		echo "✅ Container started with .env configuration"; \
 	else \
-		docker run -d --name $(CONTAINER_NAME) -p $(PORT):8080 -v fab-data:/app/data -e RABBITMQ_ENABLED=false $(IMAGE_NAME); \
+		docker run -d --name $(CONTAINER_NAME) -p $(PORT):8080 -v fab-data:/app/data -e MQTT_ENABLED=false $(IMAGE_NAME); \
 		echo "✅ Container started with default configuration"; \
 	fi
 

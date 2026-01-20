@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fab.config import config
 from fab.bot.bot import create_bot
 from fab.web.server import create_server
-from fab.utils.rabbitmq import rabbitmq_service
+from fab.utils.mqtt import mqtt_service
 from fab.db.database import Database
 from fab.db.manager import db_manager
 from fab.db import database as db_module
@@ -42,7 +42,7 @@ class FABApplication:
             
             logger.info("Starting FAB - Firewall Access Bot...")
             logger.info(f"Log level: {config.log_level}")
-            logger.info(f"RabbitMQ enabled: {config.rabbitmq_enabled}")
+            logger.info(f"MQTT enabled: {config.mqtt_enabled}")
             logger.info(f"Nginx proxy mode: {config.nginx_enabled}")
             logger.info(f"Database path: {config.database_path}")
             
@@ -72,13 +72,13 @@ class FABApplication:
                 logger.error(f"Database connection test failed: {e}")
                 raise
             
-            # Start RabbitMQ service (optional)
-            if not rabbitmq_service.start():
-                if config.rabbitmq_enabled:
-                    logger.error("Failed to connect to RabbitMQ")
-                    raise RuntimeError("RabbitMQ connection failed")
+            # Start MQTT service (optional)
+            if not mqtt_service.start():
+                if config.mqtt_enabled:
+                    logger.error("Failed to connect to MQTT")
+                    raise RuntimeError("MQTT connection failed")
                 else:
-                    logger.warning("RabbitMQ connection failed, but it's disabled - continuing")
+                    logger.warning("MQTT connection failed, but it's disabled - continuing")
             
             # Create and start web server
             logger.info("Starting web server...")
@@ -119,9 +119,9 @@ class FABApplication:
                 logger.info("Stopping web server...")
                 self.web_server.stop()
             
-            # Stop RabbitMQ service
-            logger.info("Disconnecting from RabbitMQ...")
-            rabbitmq_service.stop()
+            # Stop MQTT service
+            logger.info("Disconnecting from MQTT...")
+            mqtt_service.stop()
             
             # Close database connections
             if self.database:
