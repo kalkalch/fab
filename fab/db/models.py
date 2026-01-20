@@ -320,15 +320,10 @@ class AccessRequest:
             return False
         return datetime.now(timezone.utc) > self.expires_at
     
-    def to_rabbitmq_message(self) -> str:
-        """Convert access request to RabbitMQ JSON message."""
+    def to_mqtt_payload(self) -> str:
+        """Convert access request to MQTT JSON payload."""
         message = {
-            "status": self.status.value,
-            "ip_address": self.ip_address,
-            "duration": self.duration,
-            "timestamp": self.created_at.isoformat(),
-            "request_id": self.id,
-            "user_id": self.telegram_user_id
+            "ttl": self.duration
         }
         return json.dumps(message, ensure_ascii=False)
     

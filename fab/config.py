@@ -51,38 +51,33 @@ class Config:
         self.site_url: str = self._get_required_env("SITE_URL")
         self.host: str = os.getenv("HOST", "0.0.0.0")
         
-        # RabbitMQ Configuration
-        self.rabbitmq_enabled: bool = os.getenv("RABBITMQ_ENABLED", "false").lower() in ("true", "1", "yes")
-        
-        # Only load RabbitMQ settings if enabled
-        if self.rabbitmq_enabled:
-            self.rabbitmq_host: str = self._get_required_env("RABBITMQ_HOST")
-            self.rabbitmq_port: int = int(os.getenv("RABBITMQ_PORT", "5672"))
-            self.rabbitmq_username: str = os.getenv("RABBITMQ_USERNAME", "guest")
-            self.rabbitmq_password: str = os.getenv("RABBITMQ_PASSWORD", "guest")
-            self.rabbitmq_queue: str = os.getenv("RABBITMQ_QUEUE", "firewall_access")
-            # Handle RABBITMQ_VHOST: if not set, default to "/"
-            # User has full control over vhost value
-            vhost = os.getenv("RABBITMQ_VHOST")
-            if not vhost:
-                vhost = "/"  # Default RabbitMQ vhost
-            self.rabbitmq_vhost: str = vhost
-            self.rabbitmq_exchange: str = os.getenv("RABBITMQ_EXCHANGE", "")
-            self.rabbitmq_exchange_type: str = os.getenv("RABBITMQ_EXCHANGE_TYPE", "direct")
-            self.rabbitmq_routing_key: str = os.getenv("RABBITMQ_ROUTING_KEY", "firewall.access")
-            self.rabbitmq_queue_type: str = os.getenv("RABBITMQ_QUEUE_TYPE", "classic")
+        # MQTT Configuration
+        self.mqtt_enabled: bool = os.getenv("MQTT_ENABLED", "false").lower() in (
+            "true",
+            "1",
+            "yes"
+        )
+        if self.mqtt_enabled:
+            self.mqtt_host: str = self._get_required_env("MQTT_HOST")
+            self.mqtt_port: int = int(os.getenv("MQTT_PORT", "1883"))
+            self.mqtt_client_id: str = self._get_required_env("MQTT_CLIENT_ID")
+            self.mqtt_username: str = os.getenv("MQTT_USERNAME", "")
+            self.mqtt_password: str = os.getenv("MQTT_PASSWORD", "")
+            self.mqtt_keepalive: int = int(os.getenv("MQTT_KEEPALIVE", "60"))
+            self.mqtt_qos: int = int(os.getenv("MQTT_QOS", "1"))
+            self.mqtt_topic_prefix: str = os.getenv(
+                "MQTT_TOPIC_PREFIX",
+                "mikrotik/whitelist/ip"
+            )
         else:
-            # Set defaults when disabled (won't be used, but safe values)
-            self.rabbitmq_host: str = ""
-            self.rabbitmq_port: int = 5672
-            self.rabbitmq_username: str = ""
-            self.rabbitmq_password: str = ""
-            self.rabbitmq_queue: str = ""
-            self.rabbitmq_vhost: str = "/"  # Keep valid default even when disabled
-            self.rabbitmq_exchange: str = ""
-            self.rabbitmq_exchange_type: str = "direct"
-            self.rabbitmq_routing_key: str = ""
-            self.rabbitmq_queue_type: str = "classic"
+            self.mqtt_host = ""
+            self.mqtt_port = 1883
+            self.mqtt_client_id = ""
+            self.mqtt_username = ""
+            self.mqtt_password = ""
+            self.mqtt_keepalive = 60
+            self.mqtt_qos = 1
+            self.mqtt_topic_prefix = "mikrotik/whitelist/ip"
             
         # Global exclude IPs (always-open policy) as CIDR
         # Default: standard private/link-local/test ranges
@@ -140,15 +135,11 @@ class Config:
         )
     
     @property
-    def rabbitmq_url(self) -> str:
-        """Get RabbitMQ connection URL."""
-        if not self.rabbitmq_enabled:
+    def mqtt_url(self) -> str:
+        """Get MQTT connection URL."""
+        if not self.mqtt_enabled:
             return ""
-        
-        return (
-            f"amqp://{self.rabbitmq_username}:{self.rabbitmq_password}"
-            f"@{self.rabbitmq_host}:{self.rabbitmq_port}{self.rabbitmq_vhost}"
-        )
+        return f"mqtt://{self.mqtt_host}:{self.mqtt_port}"
 
 
 # Global configuration instance

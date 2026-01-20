@@ -6,13 +6,15 @@ for the Telegram bot interface.
 """
 
 import logging
+import ipaddress
 from typing import Optional
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from ..config import config
 from ..models import access as access_module
-from ..utils.rabbitmq import rabbitmq_service
+from ..utils.mqtt import mqtt_service
+from ..utils.ip_utils import is_local_ip
 from ..utils.i18n import i18n
 from ..db.manager import db_manager
 
@@ -308,9 +310,25 @@ async def handle_close_access(query, user_id: int, access_id: str) -> None:
         request = access_module.access_manager.close_access_request(access_id)
         
         if request and request.telegram_user_id == user_id:
-            # Send message to RabbitMQ and log
-            message = request.to_rabbitmq_message()
-            rabbitmq_service.publish_access_event(message)
+            # Clear MQTT retained message for external IPs only
+            try:
+                ip_obj = ipaddress.ip_address(request.ip_address or "127.0.0.1")
+            except Exception:
+                ip_obj = ipaddress.ip_address("127.0.0.1")
+            ip_excluded = is_local_ip(request.ip_address) or any(
+                ip_obj in net for net in getattr(config, 'exclude_networks', [])
+            )
+            if ip_excluded:
+                logger.info(
+                    f"Access closed for request {request.id}, IP: {request.ip_address} "
+                    "- MQTT message skipped (excluded)"
+                )
+            elif request.ip_address:
+                mqtt_service.publish_whitelist_close(request.ip_address)
+            else:
+                logger.warning(
+                    f"Access closed for request {request.id} without IP, MQTT clear skipped"
+                )
             
             response_text = i18n.get_text("bot.access_closed", 
                                         ip=request.ip_address or i18n.get_text("web.unknown"),

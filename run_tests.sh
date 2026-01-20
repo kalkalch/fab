@@ -54,7 +54,7 @@ try:
         'fab.db.models',
         'fab.db.manager',
         'fab.utils.i18n',
-        'fab.utils.rabbitmq'
+        'fab.utils.mqtt'
     ]
     
     for module in modules:

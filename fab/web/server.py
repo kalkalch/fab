@@ -28,7 +28,7 @@ from io import BytesIO
 
 from ..config import config
 from ..models import access as access_module
-from ..utils.rabbitmq import rabbitmq_service
+from ..utils.mqtt import mqtt_service
 from ..utils.ip_utils import is_local_ip
 from ..utils.i18n import i18n
 
@@ -221,19 +221,19 @@ def create_app() -> Flask:
     def health():
         """Healthcheck endpoint for load balancers and monitors."""
         try:
-            # Check RabbitMQ health if enabled
-            rabbitmq_status = rabbitmq_service.get_status()
+            # Check MQTT health if enabled
+            mqtt_status = mqtt_service.get_status()
             
             health_data = {
                 "status": "healthy",
                 "timestamp": time.time(),
-                "rabbitmq": rabbitmq_status
+                "mqtt": mqtt_status
             }
             
-            # If RabbitMQ is enabled but not connected, mark as degraded
-            if rabbitmq_status["enabled"] and not rabbitmq_status.get("connected", False):
+            # If MQTT is enabled but not connected, mark as degraded
+            if mqtt_status["enabled"] and not mqtt_status.get("connected", False):
                 health_data["status"] = "degraded"
-                health_data["warnings"] = ["RabbitMQ connection unavailable"]
+                health_data["warnings"] = ["MQTT connection unavailable"]
             
             return jsonify(health_data), 200
             
@@ -401,7 +401,7 @@ def create_app() -> Flask:
                 _wait_for_uniform_response(start_time, 0.3)
                 return "OK", 200
             
-            # Close any previous active requests for this user (no RabbitMQ 'close' publish)
+            # Close any previous active requests for this user (no MQTT 'close' publish)
             try:
                 prev_active = access_module.access_manager.get_active_requests_for_user(
                     session.telegram_user_id
@@ -438,12 +438,11 @@ def create_app() -> Flask:
             if ip_excluded:
                 logger.info(
                     f"Access opened for user {session.telegram_user_id}, IP: {client_ip}, "
-                    f"duration: {duration}s - RabbitMQ message skipped (excluded)"
+                    f"duration: {duration}s - MQTT message skipped (excluded)"
                 )
             else:
-                # Send message to RabbitMQ for external IPs only
-                message = access_request.to_rabbitmq_message()
-                rabbitmq_service.publish_access_event(message)
+                # Send MQTT retained message for external IPs only
+                mqtt_service.publish_whitelist_open(client_ip, duration)
                 logger.info(f"Access opened for user {session.telegram_user_id}, IP: {client_ip}, duration: {duration}s")
             
             _wait_for_uniform_response(start_time, 0.3)
@@ -533,12 +532,17 @@ def create_app() -> Flask:
             )
             if ip_excluded:
                 logger.info(
-                    f"Access closed for request {access_request.id}, IP: {access_request.ip_address} - RabbitMQ message skipped (excluded)"
+                    f"Access closed for request {access_request.id}, IP: {access_request.ip_address} - MQTT message skipped (excluded)"
                 )
             else:
-                # Send message to RabbitMQ for external IPs only
-                message = access_request.to_rabbitmq_message()
-                rabbitmq_service.publish_access_event(message)
+                # Clear MQTT retained message for external IPs only
+                if access_request.ip_address:
+                    mqtt_service.publish_whitelist_close(access_request.ip_address)
+                else:
+                    logger.warning(
+                        f"Access closed for request {access_request.id} without IP, "
+                        "MQTT clear skipped"
+                    )
                 logger.info(f"Access closed for request {access_request.id}")
             
             _wait_for_uniform_response(start_time, 0.3)

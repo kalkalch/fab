@@ -1,7 +1,7 @@
 """
 FAB - Firewall Access Bot
 
-A Telegram bot for managing firewall access with web interface and RabbitMQ integration.
+A Telegram bot for managing firewall access with web interface and MQTT integration.
 """
 
 __version__ = "1.0.0"

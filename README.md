@@ -1,6 +1,6 @@
 # FAB - Firewall Access Bot
 
-A Telegram bot for managing firewall access with web interface and RabbitMQ integration.
+A Telegram bot for managing firewall access with web interface and MQTT integration.
 
 ## Features
 
@@ -12,7 +12,7 @@ A Telegram bot for managing firewall access with web interface and RabbitMQ inte
 - **Time-based Access Control**: Configure access duration
 - **SQLite Database**: Persistent storage for sessions, requests, and users
 - **Nginx Configuration**: Pre-configured nginx.conf for production deployment with rate limiting
-- **RabbitMQ Integration**: Real-time messaging for access events
+- **MQTT Integration**: Real-time messaging for access events
 - **IP Address Tracking**: Monitor and log access requests
 
 ## Architecture
@@ -36,21 +36,14 @@ A Telegram bot for managing firewall access with web interface and RabbitMQ inte
    - Manual access closure option
    - Real-time access status display
 
-4. **RabbitMQ Integration** (Optional)
-   - JSON message generation for access events
-   - Can be enabled/disabled via `RABBITMQ_ENABLED` environment variable
-   - When disabled, all RabbitMQ configuration variables are ignored
-   - **Advanced Configuration**:
-     - Support for custom exchanges (direct/fanout/topic/headers)
-     - Configurable routing keys and queue bindings
-     - Virtual host (vhost) support with auto-validation
-     - Both classic and quorum queue types
-     - Enterprise authentication support
-   - All access events are always logged to stdout as backup
-   - Message contains:
-     - Access status (open/closed)
-     - User IP address
-     - Access duration
+4. **MQTT Integration**
+   - Publishes access events to MQTT broker
+   - Enabled/disabled via `MQTT_ENABLED`
+   - Persistent connection with auto-reconnect
+   - Uses `MQTT_CLIENT_ID` for client identification
+   - Topic format: `mikrotik/whitelist/ip/<ip>`
+   - Payload: `{"ttl": 3600}`
+   - Retained empty message is published after TTL to clear topic
 
 5. **SQLite Database**
    - Persistent storage for all data
@@ -162,18 +155,16 @@ ACCESS_TOKEN_EXPIRY=3600
 # Set to true when running behind nginx proxy, false for direct access
 NGINX_ENABLED=false
 
-# RabbitMQ Configuration (optional)
-RABBITMQ_ENABLED=false
-RABBITMQ_HOST=localhost
-RABBITMQ_PORT=5672
-RABBITMQ_USERNAME=guest
-RABBITMQ_PASSWORD=guest
-RABBITMQ_QUEUE=firewall_access
-RABBITMQ_VHOST=/
-RABBITMQ_EXCHANGE=
-RABBITMQ_EXCHANGE_TYPE=direct
-RABBITMQ_ROUTING_KEY=firewall.access
-RABBITMQ_QUEUE_TYPE=classic
+# MQTT Configuration
+MQTT_ENABLED=true
+MQTT_HOST=localhost
+MQTT_PORT=1883
+MQTT_CLIENT_ID=fab-bot
+MQTT_USERNAME=
+MQTT_PASSWORD=
+MQTT_KEEPALIVE=60
+MQTT_QOS=1
+MQTT_TOPIC_PREFIX=mikrotik/whitelist/ip
 ```
 
 ### Environment Variables
@@ -190,17 +181,15 @@ RABBITMQ_QUEUE_TYPE=classic
 | `ACCESS_TOKEN_EXPIRY` | Session token expiry in seconds | `3600` | ❌ |
 | `NGINX_ENABLED` | Enable nginx proxy mode for IP detection | `false` | ❌ |
 | `LOG_LEVEL` | Logging level (DEBUG/INFO/WARNING/ERROR) | `INFO` | ❌ |
-| `RABBITMQ_ENABLED` | Enable RabbitMQ message publishing | `false` | ❌ |
-| `RABBITMQ_HOST` | RabbitMQ server hostname | `localhost` | Only if enabled |
-| `RABBITMQ_PORT` | RabbitMQ server port | `5672` | Only if enabled |
-| `RABBITMQ_USERNAME` | RabbitMQ username | `guest` | Only if enabled |
-| `RABBITMQ_PASSWORD` | RabbitMQ password | `guest` | Only if enabled |
-| `RABBITMQ_QUEUE` | RabbitMQ queue name | `firewall_access` | Only if enabled |
-| `RABBITMQ_VHOST` | RabbitMQ virtual host (use `/` for default vhost) | `/` | Only if enabled |
-| `RABBITMQ_EXCHANGE` | RabbitMQ exchange name (empty = default) | `` | Only if enabled |
-| `RABBITMQ_EXCHANGE_TYPE` | Exchange type (direct/fanout/topic/headers) | `direct` | Only if enabled |
-| `RABBITMQ_ROUTING_KEY` | RabbitMQ routing key | `firewall.access` | Only if enabled |
-| `RABBITMQ_QUEUE_TYPE` | Queue type (classic/quorum) | `classic` | Only if enabled |
+| `MQTT_ENABLED` | Enable MQTT publishing | `true` | ❌ |
+| `MQTT_HOST` | MQTT broker host | `localhost` | Only if enabled |
+| `MQTT_PORT` | MQTT broker port | `1883` | Only if enabled |
+| `MQTT_CLIENT_ID` | MQTT client ID | - | ✅ |
+| `MQTT_USERNAME` | MQTT username | `` | Only if enabled |
+| `MQTT_PASSWORD` | MQTT password | `` | Only if enabled |
+| `MQTT_KEEPALIVE` | Keepalive interval (sec) | `60` | ❌ |
+| `MQTT_QOS` | Publish QoS | `1` | ❌ |
+| `MQTT_TOPIC_PREFIX` | Topic prefix | `mikrotik/whitelist/ip` | ❌ |
 
 ## Usage
 
@@ -248,142 +237,22 @@ RABBITMQ_QUEUE_TYPE=classic
    - Select access duration on web interface
    - Monitor access status in real-time
 
-**Note**: The application works without RabbitMQ - set `RABBITMQ_ENABLED=false` to run without message queue. All access events will still be logged to stdout.
+**Note**: The application works without MQTT — set `MQTT_ENABLED=false` to run without a broker. All access events will still be logged to stdout.
 
-### RabbitMQ Connection Architecture
+### MQTT Connection and TTL
 
-FAB uses **persistent connections** to RabbitMQ for optimal performance:
+FAB uses a **persistent MQTT connection** with auto-reconnect:
 
-- **Persistent Connection**: Connection established at startup and maintained continuously
-- **Keep-Alive Thread**: Background thread monitors connection health every 15 seconds
-- **Auto-Reconnection**: Automatic reconnection with exponential backoff (5s → 10s → 20s → 40s → 60s)
-- **Thread-Safe**: All operations protected with `threading.RLock()`
-- **Heartbeat**: 30 seconds for fast connection failure detection
-- **Health Monitoring**: Connection status available via `/health` endpoint
+- **Persistent Connection**: Established on startup and kept alive
+- **Auto-Reconnection**: Automatic reconnect on connection loss
+- **Client ID**: Configured via `MQTT_CLIENT_ID`
+- **Health Monitoring**: Connection status available via `/health`
+- **TTL cleanup**: Retained empty message is published after TTL expires
 
-### RabbitMQ Queue Types
+### MQTT Message Format
 
-FAB supports two types of RabbitMQ queues:
-
-#### Classic Queues (default)
-- **When to use**: Standard deployments, single-node setups, development
-- **Requirements**: None special
-- **Performance**: Good for most use cases
-- **Configuration**: `RABBITMQ_QUEUE_TYPE=classic`
-
-#### Quorum Queues  
-- **When to use**: High-availability production deployments with clustering
-- **Requirements**: 
-  - RabbitMQ 3.8.0+ 
-  - **Minimum 3-node cluster**
-  - More RAM and CPU resources
-- **Benefits**: Enhanced durability, automatic leader election, better replication
-- **Configuration**: `RABBITMQ_QUEUE_TYPE=quorum`
-
-**⚠️ Important**: Quorum queues require a RabbitMQ cluster with at least 3 nodes. For single-node deployments, use classic queues.
-
-### RabbitMQ Configuration Examples
-
-#### Scenario 1: Simple Setup (Recommended for most users)
-```env
-RABBITMQ_ENABLED=true
-RABBITMQ_HOST=localhost
-RABBITMQ_QUEUE=firewall_access
-# Other variables use defaults
-```
-- Uses default exchange with direct routing to queue
-- Messages go directly to `firewall_access` queue
-- Simple and reliable
-
-#### Scenario 2: Custom Exchange with Routing
-```env
-RABBITMQ_ENABLED=true
-RABBITMQ_HOST=rabbitmq.example.com
-RABBITMQ_EXCHANGE=security_events
-RABBITMQ_EXCHANGE_TYPE=direct
-RABBITMQ_ROUTING_KEY=firewall.access.granted
-RABBITMQ_QUEUE=firewall_notifications
-```
-- Uses custom exchange for organizing different event types
-- Allows multiple consumers for different routing keys
-
-#### Scenario 3: Fanout for Multiple Consumers
-```env
-RABBITMQ_ENABLED=true
-RABBITMQ_HOST=rabbitmq.example.com
-RABBITMQ_EXCHANGE=broadcast_events
-RABBITMQ_EXCHANGE_TYPE=fanout
-RABBITMQ_QUEUE=firewall_logger
-# RABBITMQ_ROUTING_KEY is ignored for fanout
-```
-- All messages sent to all queues bound to the exchange
-- Good for monitoring, logging, and alerting systems
-
-#### Scenario 4: Enterprise with Authentication
-```env
-RABBITMQ_ENABLED=true
-RABBITMQ_HOST=rabbitmq-cluster.corp.com
-RABBITMQ_PORT=5672
-RABBITMQ_USERNAME=fab_service
-RABBITMQ_PASSWORD=secure_password
-RABBITMQ_VHOST=/production  # Note: "/" is part of vhost name
-RABBITMQ_QUEUE_TYPE=quorum
-RABBITMQ_EXCHANGE=security_hub
-RABBITMQ_ROUTING_KEY=firewall.events
-```
-- Production setup with authentication
-- Custom vhost for isolation
-- Quorum queues for high availability
-
-#### Scenario 5: Disabled RabbitMQ (Development)
-```env
-RABBITMQ_ENABLED=false
-# All other RABBITMQ_* variables are ignored
-```
-- All events logged to stdout only
-- No external dependencies
-
-### RabbitMQ Troubleshooting
-
-#### Connection Issues
-- **Error**: `Failed to connect to RabbitMQ`
-- **Solutions**:
-  - Check `RABBITMQ_HOST` and `RABBITMQ_PORT`
-  - Verify RabbitMQ server is running
-  - Check network connectivity and firewall rules
-  - Validate credentials (`RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`)
-
-#### Authentication Errors
-- **Error**: `ACCESS_REFUSED` 
-- **Solutions**:
-  - Verify username/password are correct
-  - Check if user has permissions on the vhost
-  - Ensure vhost exists: `rabbitmqctl list_vhosts`
-  - **Note**: FAB uses exact vhost value you specify:
-    - `RABBITMQ_VHOST=/` → default vhost
-    - `RABBITMQ_VHOST=/production` → vhost named "/production"
-    - `RABBITMQ_VHOST=production` → vhost named "production" (no auto-prefixing)
-
-#### Queue Declaration Failures
-- **Error**: `PRECONDITION_FAILED` for queue type
-- **Solutions**:
-  - Cannot change queue type from classic to quorum on existing queue
-  - Delete existing queue or use different queue name
-  - For quorum queues: ensure 3+ node cluster
-
-#### Exchange/Routing Issues
-- **Error**: Messages not reaching consumers
-- **Solutions**:
-  - Check exchange type matches routing strategy
-  - Verify routing key bindings: `rabbitmqctl list_bindings`
-  - For fanout: routing key is ignored
-  - For direct: routing key must match exactly
-
-#### Performance Considerations
-- **Classic queues**: Better for single-node, development
-- **Quorum queues**: Better for clusters, production
-- **Fanout exchanges**: Higher resource usage
-- **Direct exchanges**: Most efficient for point-to-point
+- **Topic**: `mikrotik/whitelist/ip/<ip>`
+- **Payload**: `{"ttl": 3600}`
 
 ## Production Deployment with nginx
 
@@ -479,17 +348,11 @@ docker logs -f fab-container
 
 ## Message Format
 
-Access events are always logged to stdout and optionally sent to RabbitMQ in JSON format:
+Access events are always logged to stdout and optionally sent to MQTT:
 
-```json
-{
-  "status": "open|closed",
-  "ip_address": "192.168.1.100",
-  "duration": 3600,
-  "timestamp": "2024-01-01T12:00:00Z",
-  "request_id": "uuid-here",
-  "user_id": 12345
-}
+```text
+Topic: mikrotik/whitelist/ip/198.51.100.21
+Payload: {"ttl": 3600}
 ```
 
 ## Contributing
