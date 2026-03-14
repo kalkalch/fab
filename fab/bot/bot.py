@@ -33,24 +33,26 @@ class FABBot:
     
     def _setup_application(self) -> None:
         """Setup the bot application with handlers."""
-        # Create custom request with longer timeouts for slow networks
-        request = HTTPXRequest(
+        # Create custom request with longer timeouts for slow networks.
+        # When proxy is set, pass it to HTTPXRequest (builder.proxy() cannot be used with custom request).
+        request_kw = dict(
             connection_pool_size=10,
-            read_timeout=60.0,      # Increased from 30s for slow networks
-            write_timeout=45.0,     # Increased from 30s
-            connect_timeout=30.0,   # Increased from 15s for high latency
-            pool_timeout=20.0       # Increased from 10s
+            read_timeout=60.0,
+            write_timeout=45.0,
+            connect_timeout=30.0,
+            pool_timeout=20.0,
         )
+        if config.telegram_api_proxy:
+            request_kw["proxy"] = config.telegram_api_proxy
+        request = HTTPXRequest(**request_kw)
 
-        builder = (
+        self.application = (
             Application.builder()
             .token(config.telegram_bot_token)
             .request(request)
-            .rate_limiter(rate_limiter=None)  # Let Telegram handle rate limiting
+            .rate_limiter(rate_limiter=None)
+            .build()
         )
-        if config.telegram_api_proxy:
-            builder = builder.proxy(config.telegram_api_proxy).get_updates_proxy(config.telegram_api_proxy)
-        self.application = builder.build()
         
         # Add command handlers
         self.application.add_handler(CommandHandler("start", start_command))
