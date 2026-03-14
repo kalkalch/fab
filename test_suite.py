@@ -64,6 +64,9 @@ class FABTestSuite:
             self.test_class_initialization,
             self.test_method_signatures,
             self.test_environment_variables,
+            # New code: source (telegram/vk) in DB and models
+            self.test_source_in_models,
+            self.test_vk_bot_module,
             # Web API behavioral tests
             self.test_web_open_returns_json,
             self.test_web_repeat_open_from_same_ip,
@@ -222,7 +225,10 @@ class FABTestSuite:
                 'telegram_bot_token', 'admin_telegram_ids', 'http_port',
                 'site_url', 'host', 'mqtt_enabled', 'database_path'
             ]
-            
+            # New code: optional attributes for proxy, backup URL, VK
+            optional_attrs = [
+                'telegram_api_proxy', 'vk_api_proxy', 'site_backup_url', 'vk_enabled'
+            ]
             for attr in required_attrs:
                 if not hasattr(config, attr):
                     error_msg = f"Missing required config attribute: {attr}"
@@ -231,7 +237,23 @@ class FABTestSuite:
                 else:
                     self.passed_tests += 1
                 self.total_tests += 1
-            
+
+            for attr in optional_attrs:
+                if hasattr(config, attr):
+                    self.passed_tests += 1
+                else:
+                    error_msg = f"Missing config attribute: {attr}"
+                    self.results['config_errors'].append(error_msg)
+                    logger.error(f"❌ {error_msg}")
+                self.total_tests += 1
+            if hasattr(config, 'vk_enabled'):
+                if not isinstance(config.vk_enabled, bool):
+                    self.results['config_errors'].append("config.vk_enabled should be bool")
+                    logger.error("❌ config.vk_enabled should be bool")
+                else:
+                    self.passed_tests += 1
+                self.total_tests += 1
+
             # Test MQTT config consistency
             if config.mqtt_enabled:
                 mqtt_attrs = ['mqtt_host', 'mqtt_port', 'mqtt_client_id']
@@ -282,7 +304,21 @@ class FABTestSuite:
                     self.results['database_errors'].append(error_msg)
                     logger.error(f"❌ {error_msg}")
                 self.total_tests += 1
-            
+
+            # New code: tables must have 'source' column (multi-platform support)
+            for table in expected_tables:
+                if table not in tables:
+                    continue
+                cursor.execute(f"PRAGMA table_info({table})")
+                columns = [row[1] for row in cursor.fetchall()]
+                if 'source' in columns:
+                    self.passed_tests += 1
+                else:
+                    error_msg = f"Table {table} missing column 'source'"
+                    self.results['database_errors'].append(error_msg)
+                    logger.error(f"❌ {error_msg}")
+                self.total_tests += 1
+
             conn.close()
             
         except Exception as e:
@@ -415,6 +451,103 @@ class FABTestSuite:
         except ImportError as e:
             logger.warning(f"Skipping web tests (missing dependency): {e}")
             return None
+
+    def test_source_in_models(self):
+        """Test that source (telegram/vk) is stored and retrieved in whitelist, sessions, access_requests."""
+        logger.info("🔀 Testing source in models...")
+        try:
+            if not self._setup_in_memory_db():
+                return
+            from fab.db import database as db_module
+            from fab.db.models import (
+                WhitelistUser,
+                UserSession,
+                AccessRequest,
+                SOURCE_TELEGRAM,
+                SOURCE_VK,
+            )
+            from fab.db.manager import db_manager
+
+            # Whitelist: add per source, check is_whitelisted and get_all
+            WhitelistUser.add(SOURCE_TELEGRAM, 1001, 999, username="tg_user")
+            WhitelistUser.add(SOURCE_VK, 2001, 999, username="vk_user")
+            self.total_tests += 1
+            if WhitelistUser.is_whitelisted(SOURCE_TELEGRAM, 1001) and WhitelistUser.is_whitelisted(SOURCE_VK, 2001):
+                self.passed_tests += 1
+            else:
+                self.results['logic_errors'].append("WhitelistUser is_whitelisted(source, id) failed")
+            self.total_tests += 1
+            tg_list = WhitelistUser.get_all(SOURCE_TELEGRAM)
+            vk_list = WhitelistUser.get_all(SOURCE_VK)
+            if len(tg_list) == 1 and tg_list[0].telegram_user_id == 1001 and tg_list[0].source == SOURCE_TELEGRAM:
+                self.passed_tests += 1
+            else:
+                self.results['logic_errors'].append("WhitelistUser get_all(SOURCE_TELEGRAM) failed")
+            if len(vk_list) == 1 and vk_list[0].telegram_user_id == 2001 and vk_list[0].source == SOURCE_VK:
+                self.passed_tests += 1
+            else:
+                self.results['logic_errors'].append("WhitelistUser get_all(SOURCE_VK) failed")
+            self.total_tests += 2
+
+            # Session: create with source, check session.source
+            s_tg = UserSession.create(SOURCE_TELEGRAM, 1001, 2222, 3600)
+            s_vk = UserSession.create(SOURCE_VK, 2001, 3333, 3600)
+            self.total_tests += 1
+            if s_tg.source == SOURCE_TELEGRAM and s_vk.source == SOURCE_VK:
+                self.passed_tests += 1
+            else:
+                self.results['logic_errors'].append("UserSession create source mismatch")
+            got_tg = UserSession.get_by_token(s_tg.token)
+            got_vk = UserSession.get_by_token(s_vk.token)
+            self.total_tests += 1
+            if got_tg and got_tg.source == SOURCE_TELEGRAM and got_vk and got_vk.source == SOURCE_VK:
+                self.passed_tests += 1
+            else:
+                self.results['logic_errors'].append("UserSession get_by_token source mismatch")
+            self.total_tests += 1
+
+            # AccessRequest: create with source, get_active_for_user(source, id)
+            r_tg = AccessRequest.create(SOURCE_TELEGRAM, 1001, 2222, 3600)
+            r_vk = AccessRequest.create(SOURCE_VK, 2001, 3333, 3600)
+            active_tg = AccessRequest.get_active_for_user(SOURCE_TELEGRAM, 1001)
+            active_vk = AccessRequest.get_active_for_user(SOURCE_VK, 2001)
+            if len(active_tg) == 1 and active_tg[0].source == SOURCE_TELEGRAM and len(active_vk) == 1 and active_vk[0].source == SOURCE_VK:
+                self.passed_tests += 1
+            else:
+                self.results['logic_errors'].append("AccessRequest get_active_for_user(source, id) failed")
+            self.total_tests += 1
+
+            # db_manager with source (is_user_authorized uses whitelist per source)
+            if db_manager.is_user_authorized(1001, SOURCE_TELEGRAM) and db_manager.is_user_authorized(2001, SOURCE_VK):
+                self.passed_tests += 1
+            else:
+                self.results['logic_errors'].append("db_manager is_user_authorized(source, id) failed")
+            self.total_tests += 1
+            if len(db_manager.get_whitelist_users(SOURCE_TELEGRAM)) == 1 and len(db_manager.get_whitelist_users(SOURCE_VK)) == 1:
+                self.passed_tests += 1
+            else:
+                self.results['logic_errors'].append("db_manager get_whitelist_users(source) failed")
+            self.total_tests += 1
+        except Exception as e:
+            self.results['runtime_errors'].append(f"test_source_in_models: {e}")
+            logger.error(f"❌ test_source_in_models: {e}")
+
+    def test_vk_bot_module(self):
+        """Test that VK bot module can be imported and create_vk_bot() works (no start)."""
+        logger.info("🤖 Testing VK bot module...")
+        try:
+            sys.path.insert(0, str(self.project_root))
+            from fab.bot.vk_bot import create_vk_bot, VKBot
+            bot = create_vk_bot()
+            self.total_tests += 1
+            if isinstance(bot, VKBot):
+                self.passed_tests += 1
+            else:
+                self.results['runtime_errors'].append("create_vk_bot() did not return VKBot instance")
+            self.total_tests += 1
+        except Exception as e:
+            self.results['runtime_errors'].append(f"test_vk_bot_module: {e}")
+            logger.error(f"❌ test_vk_bot_module: {e}")
 
     def test_web_open_returns_json(self):
         """Open endpoint must return JSON even on invalid token."""

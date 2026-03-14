@@ -23,6 +23,10 @@ def _get_db():
 
 logger = logging.getLogger(__name__)
 
+# Platform source for multi-bot support (telegram / vk)
+SOURCE_TELEGRAM = "telegram"
+SOURCE_VK = "vk"
+
 
 class AccessStatus(Enum):
     """Enumeration for access status."""
@@ -33,7 +37,8 @@ class AccessStatus(Enum):
 @dataclass
 class WhitelistUser:
     """Whitelist user data model with database operations."""
-    
+
+    source: str
     telegram_user_id: int
     username: Optional[str]
     first_name: Optional[str]
@@ -41,121 +46,135 @@ class WhitelistUser:
     added_by_admin_id: int
     created_at: datetime
     updated_at: datetime
-    
+
     @classmethod
     def add(
         cls,
+        source: str,
         telegram_user_id: int,
         added_by_admin_id: int,
         username: Optional[str] = None,
         first_name: Optional[str] = None,
-        last_name: Optional[str] = None
+        last_name: Optional[str] = None,
     ) -> "WhitelistUser":
-        """Add user to whitelist."""
+        """Add user to whitelist for the given source (telegram/vk)."""
         now = datetime.now(timezone.utc)
-        
+
         _get_db().execute(
-            """INSERT OR REPLACE INTO whitelist_users 
-               (telegram_user_id, username, first_name, last_name, 
+            """INSERT OR REPLACE INTO whitelist_users
+               (source, telegram_user_id, username, first_name, last_name,
                 added_by_admin_id, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (telegram_user_id, username, first_name, last_name,
-             added_by_admin_id, now, now)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (source, telegram_user_id, username, first_name, last_name,
+             added_by_admin_id, now, now),
         )
-        
+
         user = cls(
+            source=source,
             telegram_user_id=telegram_user_id,
             username=username,
             first_name=first_name,
             last_name=last_name,
             added_by_admin_id=added_by_admin_id,
             created_at=now,
-            updated_at=now
+            updated_at=now,
         )
-        
-        logger.info(f"Added user {telegram_user_id} to whitelist by admin {added_by_admin_id}")
+
+        logger.info(
+            f"Added user {telegram_user_id} to whitelist (source={source}) by admin {added_by_admin_id}"
+        )
         return user
-    
+
     @classmethod
-    def remove(cls, telegram_user_id: int) -> bool:
-        """Remove user from whitelist."""
+    def remove(cls, source: str, telegram_user_id: int) -> bool:
+        """Remove user from whitelist for the given source."""
         cursor = _get_db().execute(
-            "DELETE FROM whitelist_users WHERE telegram_user_id = ?",
-            (telegram_user_id,)
+            "DELETE FROM whitelist_users WHERE source = ? AND telegram_user_id = ?",
+            (source, telegram_user_id),
         )
         removed = cursor.rowcount > 0
         if removed:
-            logger.info(f"Removed user {telegram_user_id} from whitelist")
+            logger.info(f"Removed user {telegram_user_id} from whitelist (source={source})")
         return removed
-    
+
     @classmethod
-    def is_whitelisted(cls, telegram_user_id: int) -> bool:
-        """Check if user is in whitelist."""
+    def is_whitelisted(cls, source: str, telegram_user_id: int) -> bool:
+        """Check if user is in whitelist for the given source."""
         row = _get_db().fetchone(
-            "SELECT 1 FROM whitelist_users WHERE telegram_user_id = ?",
-            (telegram_user_id,)
+            "SELECT 1 FROM whitelist_users WHERE source = ? AND telegram_user_id = ?",
+            (source, telegram_user_id),
         )
         return row is not None
-    
+
     @classmethod
-    def get_all(cls) -> List["WhitelistUser"]:
-        """Get all whitelisted users."""
+    def get_all(cls, source: str) -> List["WhitelistUser"]:
+        """Get all whitelisted users for the given source."""
         rows = _get_db().fetchall(
-            "SELECT * FROM whitelist_users ORDER BY created_at"
+            "SELECT * FROM whitelist_users WHERE source = ? ORDER BY created_at",
+            (source,),
         )
         return [cls._from_row(row) for row in rows]
-    
+
     @classmethod
     def _from_row(cls, row) -> "WhitelistUser":
         """Create WhitelistUser instance from database row."""
         return cls(
+            source=row['source'],
             telegram_user_id=row['telegram_user_id'],
             username=row['username'],
             first_name=row['first_name'],
             last_name=row['last_name'],
             added_by_admin_id=row['added_by_admin_id'],
             created_at=datetime.fromisoformat(row['created_at']),
-            updated_at=datetime.fromisoformat(row['updated_at'])
+            updated_at=datetime.fromisoformat(row['updated_at']),
         )
 
 
 @dataclass
 class UserSession:
     """User session data model with database operations."""
-    
+
     token: str
+    source: str
     telegram_user_id: int
     chat_id: int
     ip_address: Optional[str]
     created_at: datetime
     expires_at: datetime
     used: bool = False
-    
+
     @classmethod
-    def create(cls, telegram_user_id: int, chat_id: int, expiry_seconds: int) -> "UserSession":
+    def create(
+        cls,
+        source: str,
+        telegram_user_id: int,
+        chat_id: int,
+        expiry_seconds: int,
+    ) -> "UserSession":
         """Create new user session in database."""
         token = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(seconds=expiry_seconds)
-        
+
         _get_db().execute(
-            """INSERT INTO user_sessions 
-               (token, telegram_user_id, chat_id, created_at, expires_at, used)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (token, telegram_user_id, chat_id, now, expires_at, False)
+            """INSERT INTO user_sessions
+               (token, source, telegram_user_id, chat_id, created_at, expires_at, used)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (token, source, telegram_user_id, chat_id, now, expires_at, False),
         )
-        
+
         session = cls(
             token=token,
+            source=source,
             telegram_user_id=telegram_user_id,
             chat_id=chat_id,
             ip_address=None,
             created_at=now,
             expires_at=expires_at,
-            used=False
+            used=False,
         )
-        
-        logger.info(f"Created session {token} for user {telegram_user_id}")
+
+        logger.info(f"Created session {token} for user {telegram_user_id} (source={source})")
         return session
     
     @classmethod
@@ -220,20 +239,22 @@ class UserSession:
         """Create UserSession instance from database row."""
         return cls(
             token=row['token'],
+            source=row['source'],
             telegram_user_id=row['telegram_user_id'],
             chat_id=row['chat_id'],
             ip_address=row['ip_address'],
             created_at=datetime.fromisoformat(row['created_at']),
             expires_at=datetime.fromisoformat(row['expires_at']),
-            used=bool(row['used'])
+            used=bool(row['used']),
         )
 
 
 @dataclass
 class AccessRequest:
     """Access request data model with database operations."""
-    
+
     id: str
+    source: str
     telegram_user_id: int
     chat_id: int
     ip_address: Optional[str]
@@ -242,31 +263,33 @@ class AccessRequest:
     created_at: datetime
     expires_at: Optional[datetime]
     closed_at: Optional[datetime]
-    
+
     @classmethod
     def create(
         cls,
+        source: str,
         telegram_user_id: int,
         chat_id: int,
         duration: int,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
     ) -> "AccessRequest":
         """Create new access request in database."""
         request_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(seconds=duration) if duration > 0 else None
-        
+
         _get_db().execute(
-            """INSERT INTO access_requests 
-               (id, telegram_user_id, chat_id, ip_address, duration, status, 
+            """INSERT INTO access_requests
+               (id, source, telegram_user_id, chat_id, ip_address, duration, status,
                 created_at, expires_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (request_id, telegram_user_id, chat_id, ip_address, duration,
-             AccessStatus.OPEN.value, now, expires_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (request_id, source, telegram_user_id, chat_id, ip_address, duration,
+             AccessStatus.OPEN.value, now, expires_at),
         )
-        
+
         request = cls(
             id=request_id,
+            source=source,
             telegram_user_id=telegram_user_id,
             chat_id=chat_id,
             ip_address=ip_address,
@@ -274,10 +297,12 @@ class AccessRequest:
             status=AccessStatus.OPEN,
             created_at=now,
             expires_at=expires_at,
-            closed_at=None
+            closed_at=None,
         )
-        
-        logger.info(f"Created access request {request_id} for user {telegram_user_id}")
+
+        logger.info(
+            f"Created access request {request_id} for user {telegram_user_id} (source={source})"
+        )
         return request
     
     @classmethod
@@ -290,14 +315,14 @@ class AccessRequest:
         return cls._from_row(row) if row else None
     
     @classmethod
-    def get_active_for_user(cls, telegram_user_id: int) -> List["AccessRequest"]:
-        """Get all active access requests for user."""
+    def get_active_for_user(cls, source: str, telegram_user_id: int) -> List["AccessRequest"]:
+        """Get all active access requests for user for the given source."""
         rows = _get_db().fetchall(
-            """SELECT * FROM access_requests 
-               WHERE telegram_user_id = ? AND status = 'open' 
+            """SELECT * FROM access_requests
+               WHERE source = ? AND telegram_user_id = ? AND status = 'open'
                AND (expires_at IS NULL OR expires_at > ?)
                ORDER BY created_at DESC""",
-            (telegram_user_id, datetime.now(timezone.utc))
+            (source, telegram_user_id, datetime.now(timezone.utc)),
         )
         return [cls._from_row(row) for row in rows]
     
@@ -332,6 +357,7 @@ class AccessRequest:
         """Create AccessRequest instance from database row."""
         return cls(
             id=row['id'],
+            source=row['source'],
             telegram_user_id=row['telegram_user_id'],
             chat_id=row['chat_id'],
             ip_address=row['ip_address'],
@@ -339,7 +365,7 @@ class AccessRequest:
             status=AccessStatus(row['status']),
             created_at=datetime.fromisoformat(row['created_at']),
             expires_at=datetime.fromisoformat(row['expires_at']) if row['expires_at'] else None,
-            closed_at=datetime.fromisoformat(row['closed_at']) if row['closed_at'] else None
+            closed_at=datetime.fromisoformat(row['closed_at']) if row['closed_at'] else None,
         )
 
 

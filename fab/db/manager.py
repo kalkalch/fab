@@ -8,7 +8,7 @@ import logging
 from typing import Optional, List
 from datetime import datetime
 
-from .models import WhitelistUser, UserSession, AccessRequest
+from .models import WhitelistUser, UserSession, AccessRequest, SOURCE_TELEGRAM, SOURCE_VK
 from . import database as database_module
 from ..config import config
 
@@ -30,52 +30,63 @@ class DatabaseManager:
         logger.info("Database manager initialized")
     
     # Authorization methods
-    
-    def is_user_authorized(self, telegram_user_id: int) -> bool:
-        """Check if user is authorized (admin or in whitelist)."""
-        # Admins are always authorized
-        if telegram_user_id in config.admin_telegram_ids:
-            return True
-        
-        # Check whitelist
-        return WhitelistUser.is_whitelisted(telegram_user_id)
-    
-    def is_admin(self, telegram_user_id: int) -> bool:
-        """Check if user is admin."""
-        return telegram_user_id in config.admin_telegram_ids
-    
+
+    def is_user_authorized(self, user_id: int, source: str = SOURCE_TELEGRAM) -> bool:
+        """Check if user is authorized (admin or in whitelist) for the given source."""
+        if source == SOURCE_TELEGRAM:
+            if user_id in config.admin_telegram_ids:
+                return True
+        else:
+            if getattr(config, "admin_vk_ids", set()) and user_id in config.admin_vk_ids:
+                return True
+        return WhitelistUser.is_whitelisted(source, user_id)
+
+    def is_admin(self, user_id: int, source: str = SOURCE_TELEGRAM) -> bool:
+        """Check if user is admin for the given source."""
+        if source == SOURCE_TELEGRAM:
+            return user_id in config.admin_telegram_ids
+        return user_id in getattr(config, "admin_vk_ids", set())
+
     # Whitelist management methods
-    
+
     def add_to_whitelist(
         self,
+        source: str,
         telegram_user_id: int,
         added_by_admin_id: int,
         username: Optional[str] = None,
         first_name: Optional[str] = None,
-        last_name: Optional[str] = None
+        last_name: Optional[str] = None,
     ) -> WhitelistUser:
-        """Add user to whitelist."""
+        """Add user to whitelist for the given source."""
         return WhitelistUser.add(
+            source=source,
             telegram_user_id=telegram_user_id,
             added_by_admin_id=added_by_admin_id,
             username=username,
             first_name=first_name,
-            last_name=last_name
+            last_name=last_name,
         )
-    
-    def remove_from_whitelist(self, telegram_user_id: int) -> bool:
-        """Remove user from whitelist."""
-        return WhitelistUser.remove(telegram_user_id)
-    
-    def get_whitelist_users(self) -> List[WhitelistUser]:
-        """Get all whitelisted users."""
-        return WhitelistUser.get_all()
-    
+
+    def remove_from_whitelist(self, source: str, telegram_user_id: int) -> bool:
+        """Remove user from whitelist for the given source."""
+        return WhitelistUser.remove(source, telegram_user_id)
+
+    def get_whitelist_users(self, source: str) -> List[WhitelistUser]:
+        """Get all whitelisted users for the given source."""
+        return WhitelistUser.get_all(source)
+
     # Session management methods
-    
-    def create_session(self, telegram_user_id: int, chat_id: int, expiry_seconds: int) -> UserSession:
+
+    def create_session(
+        self,
+        source: str,
+        telegram_user_id: int,
+        chat_id: int,
+        expiry_seconds: int,
+    ) -> UserSession:
         """Create a new user session for web interface."""
-        return UserSession.create(telegram_user_id, chat_id, expiry_seconds)
+        return UserSession.create(source, telegram_user_id, chat_id, expiry_seconds)
     
     def get_session(self, token: str) -> Optional[UserSession]:
         """Get session by token, automatically remove if expired."""
@@ -95,28 +106,33 @@ class DatabaseManager:
     
     def create_access_request(
         self,
+        source: str,
         telegram_user_id: int,
         chat_id: int,
         duration: int,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
     ) -> AccessRequest:
         """Create a new access request."""
-        return AccessRequest.create(telegram_user_id, chat_id, duration, ip_address)
-    
+        return AccessRequest.create(
+            source, telegram_user_id, chat_id, duration, ip_address
+        )
+
     def get_access_request(self, request_id: str) -> Optional[AccessRequest]:
         """Get access request by ID."""
         return AccessRequest.get_by_id(request_id)
-    
+
     def close_access_request(self, request_id: str) -> Optional[AccessRequest]:
         """Close access request by ID."""
         request = AccessRequest.get_by_id(request_id)
         if request:
             request.close()
         return request
-    
-    def get_active_requests_for_user(self, telegram_user_id: int) -> List[AccessRequest]:
-        """Get all active access requests for a user."""
-        return AccessRequest.get_active_for_user(telegram_user_id)
+
+    def get_active_requests_for_user(
+        self, source: str, telegram_user_id: int
+    ) -> List[AccessRequest]:
+        """Get all active access requests for a user for the given source."""
+        return AccessRequest.get_active_for_user(source, telegram_user_id)
     
     # Maintenance methods
     

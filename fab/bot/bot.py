@@ -37,19 +37,20 @@ class FABBot:
         request = HTTPXRequest(
             connection_pool_size=10,
             read_timeout=60.0,      # Increased from 30s for slow networks
-            write_timeout=45.0,     # Increased from 30s 
+            write_timeout=45.0,     # Increased from 30s
             connect_timeout=30.0,   # Increased from 15s for high latency
             pool_timeout=20.0       # Increased from 10s
         )
-        
-        # Create application with custom request and rate limiting
-        self.application = (
+
+        builder = (
             Application.builder()
             .token(config.telegram_bot_token)
             .request(request)
             .rate_limiter(rate_limiter=None)  # Let Telegram handle rate limiting
-            .build()
         )
+        if config.telegram_api_proxy:
+            builder = builder.proxy(config.telegram_api_proxy).get_updates_proxy(config.telegram_api_proxy)
+        self.application = builder.build()
         
         # Add command handlers
         self.application.add_handler(CommandHandler("start", start_command))

@@ -69,7 +69,7 @@
                         <strong>{{ i18n.get_text('web.ip_address') }}:</strong> {{ client_ip }}
                     </div>
                     <div class="col-md-6">
-                        <strong>{{ i18n.get_text('web.user_id') }}:</strong> {{ session.user_id }}
+                        <strong>{{ i18n.get_text('web.user_id') }}:</strong> {{ session.telegram_user_id }} ({{ session.source }})
                     </div>
                 </div>
             </div>
