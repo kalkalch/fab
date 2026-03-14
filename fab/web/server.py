@@ -305,7 +305,9 @@ def create_app() -> Flask:
                 session.set_ip(client_ip)
             
             # Get active requests for this user
-            active_requests = access_module.access_manager.get_active_requests_for_user(session.telegram_user_id)
+            active_requests = access_module.access_manager.get_active_requests_for_user(
+                session.telegram_user_id, source=session.source
+            )
             
             # Wait for uniform response time
             _wait_for_uniform_response(start_time, 0.5)
@@ -404,7 +406,7 @@ def create_app() -> Flask:
             # Close any previous active requests for this user (no MQTT 'close' publish)
             try:
                 prev_active = access_module.access_manager.get_active_requests_for_user(
-                    session.telegram_user_id
+                    session.telegram_user_id, source=session.source
                 )
                 if prev_active:
                     # Close all active; the consumer side will treat new 'open' as refresh
@@ -426,7 +428,8 @@ def create_app() -> Flask:
                 telegram_user_id=session.telegram_user_id,
                 chat_id=session.chat_id,
                 duration=duration,
-                ip_address=client_ip
+                ip_address=client_ip,
+                source=session.source,
             )
             
             # Check if IP is local/private or excluded by config

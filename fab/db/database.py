@@ -123,15 +123,18 @@ class Database:
         """Create database schema if it doesn't exist."""
         with self.transaction():
             # Create whitelist table for authorized users
+            # source: 'telegram' | 'vk'; (source, telegram_user_id) unique per platform
             self.execute('''
                 CREATE TABLE IF NOT EXISTS whitelist_users (
-                    telegram_user_id INTEGER PRIMARY KEY,
+                    source TEXT NOT NULL DEFAULT 'telegram',
+                    telegram_user_id INTEGER NOT NULL,
                     username TEXT,
                     first_name TEXT,
                     last_name TEXT,
                     added_by_admin_id INTEGER NOT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (source, telegram_user_id)
                 )
             ''')
             
@@ -139,6 +142,7 @@ class Database:
             self.execute('''
                 CREATE TABLE IF NOT EXISTS user_sessions (
                     token TEXT PRIMARY KEY,
+                    source TEXT NOT NULL DEFAULT 'telegram',
                     telegram_user_id INTEGER NOT NULL,
                     chat_id INTEGER NOT NULL,
                     ip_address TEXT,
@@ -152,6 +156,7 @@ class Database:
             self.execute('''
                 CREATE TABLE IF NOT EXISTS access_requests (
                     id TEXT PRIMARY KEY,
+                    source TEXT NOT NULL DEFAULT 'telegram',
                     telegram_user_id INTEGER NOT NULL,
                     chat_id INTEGER NOT NULL,
                     ip_address TEXT,
@@ -163,17 +168,78 @@ class Database:
                 )
             ''')
             
+            # Migrate existing tables that don't have source (legacy installs)
+            self._migrate_add_source()
+            
             # Create indexes for performance
             self._create_indexes()
             
             logger.info("Database schema created successfully")
     
+    def _has_column(self, table: str, column: str) -> bool:
+        """Return True if table has the given column (for migrations)."""
+        rows = self.fetchall(
+            "SELECT name FROM pragma_table_info(?) WHERE name = ?",
+            (table, column)
+        )
+        return len(rows) > 0
+
+    def _migrate_add_source(self) -> None:
+        """Add source column to existing tables; migrate whitelist to composite PK if needed."""
+        # user_sessions: add source if missing
+        if not self._has_column("user_sessions", "source"):
+            logger.info("Migration: adding source column to user_sessions")
+            self.execute(
+                "ALTER TABLE user_sessions ADD COLUMN source TEXT NOT NULL DEFAULT 'telegram'"
+            )
+        # access_requests: add source if missing
+        if not self._has_column("access_requests", "source"):
+            logger.info("Migration: adding source column to access_requests")
+            self.execute(
+                "ALTER TABLE access_requests ADD COLUMN source TEXT NOT NULL DEFAULT 'telegram'"
+            )
+        # whitelist_users: may have old schema (telegram_user_id PK only) or no source
+        if not self._has_column("whitelist_users", "source"):
+            logger.info("Migration: adding source column to whitelist_users and converting to composite PK")
+            self.execute(
+                "ALTER TABLE whitelist_users ADD COLUMN source TEXT NOT NULL DEFAULT 'telegram'"
+            )
+            # Recreate table with composite PK (SQLite cannot ALTER PRIMARY KEY)
+            self.execute('''
+                CREATE TABLE whitelist_users_new (
+                    source TEXT NOT NULL DEFAULT 'telegram',
+                    telegram_user_id INTEGER NOT NULL,
+                    username TEXT,
+                    first_name TEXT,
+                    last_name TEXT,
+                    added_by_admin_id INTEGER NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (source, telegram_user_id)
+                )
+            ''')
+            self.execute('''
+                INSERT INTO whitelist_users_new
+                (source, telegram_user_id, username, first_name, last_name, added_by_admin_id, created_at, updated_at)
+                SELECT source, telegram_user_id, username, first_name, last_name, added_by_admin_id, created_at, updated_at
+                FROM whitelist_users
+            ''')
+            self.execute("DROP TABLE whitelist_users")
+            self.execute("ALTER TABLE whitelist_users_new RENAME TO whitelist_users")
+        else:
+            # Has source; check if PK is composite (old SQLite may have created table with single PK)
+            # If table was created by new schema, it already has (source, telegram_user_id) PK - nothing to do
+            pass
+
     def _create_indexes(self) -> None:
         """Create database indexes for better performance."""
         indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_whitelist_source_user ON whitelist_users (source, telegram_user_id)",
             "CREATE INDEX IF NOT EXISTS idx_whitelist_telegram_id ON whitelist_users (telegram_user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_sessions_source_user ON user_sessions (source, telegram_user_id)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_telegram_id ON user_sessions (telegram_user_id)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON user_sessions (expires_at)",
+            "CREATE INDEX IF NOT EXISTS idx_access_source_user ON access_requests (source, telegram_user_id)",
             "CREATE INDEX IF NOT EXISTS idx_access_telegram_id ON access_requests (telegram_user_id)",
             "CREATE INDEX IF NOT EXISTS idx_access_status ON access_requests (status)",
             "CREATE INDEX IF NOT EXISTS idx_access_expires ON access_requests (expires_at)"

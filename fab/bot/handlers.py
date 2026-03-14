@@ -17,6 +17,7 @@ from ..utils.mqtt import mqtt_service
 from ..utils.ip_utils import is_local_ip
 from ..utils.i18n import i18n
 from ..db.manager import db_manager
+from ..db.models import SOURCE_TELEGRAM
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +27,13 @@ def get_user_language(user_id: int, user_language_code: Optional[str]) -> str:
     return i18n.detect_language_from_code(user_language_code)
 
 
-def is_user_authorized(user) -> bool:
+def is_user_authorized(user, source: str = SOURCE_TELEGRAM) -> bool:
     """Check if user is authorized to use the bot (admin or whitelist)."""
     if not user:
         return False
-    
+
     try:
-        return db_manager.is_user_authorized(user.id)
+        return db_manager.is_user_authorized(user.id, source)
     except Exception as e:
         msg = str(e).lower()
         # Graceful degradation on startup or transient DB issues
@@ -42,12 +43,12 @@ def is_user_authorized(user) -> bool:
         raise
 
 
-def is_admin(user) -> bool:
+def is_admin(user, source: str = SOURCE_TELEGRAM) -> bool:
     """Check if user is admin."""
     if not user:
         return False
-    
-    return db_manager.is_admin(user.id)
+
+    return db_manager.is_admin(user.id, source)
 
 
 
@@ -56,11 +57,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user = update.effective_user
     chat_id = update.effective_chat.id
 
-    logger.info(f"User {user.id} ({user.username}) started bot in chat {chat_id}")
+    logger.info(f"User {user.id} ({user.username}) [telegram] started bot in chat {chat_id}")
 
     # Check if user is authorized
     if not is_user_authorized(user):
-        logger.warning(f"Unauthorized user {user.id} attempted to use bot")
+        logger.warning(f"Unauthorized user {user.id} [telegram] attempted to use bot")
         # Get language for unauthorized message
         language = i18n.detect_language_from_code(user.language_code)
         i18n.set_language(language)
@@ -103,7 +104,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     # Check if user is authorized
     if not is_user_authorized(user):
-        logger.warning(f"Unauthorized user {user.id} attempted to use /help")
+        logger.warning(f"Unauthorized user {user.id} [telegram] attempted to use /help")
         # Get language for unauthorized message
         language = i18n.detect_language_from_code(user.language_code)
         i18n.set_language(language)
@@ -136,11 +137,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     chat_id = query.message.chat_id
     data = query.data
     
-    logger.info(f"User {user.id} pressed button: {data}")
+    logger.info(f"User {user.id} [telegram] pressed button: {data}")
     
     # Check if user is authorized
     if not is_user_authorized(user):
-        logger.warning(f"Unauthorized user {user.id} attempted to use button: {data}")
+        logger.warning(f"Unauthorized user {user.id} [telegram] attempted to use button: {data}")
         # Get language for unauthorized message
         language = i18n.detect_language_from_code(user.language_code)
         i18n.set_language(language)
@@ -188,13 +189,15 @@ async def handle_add_access(query, user_id: int, chat_id: int) -> None:
         session = access_module.access_manager.create_session(
             telegram_user_id=user_id,
             chat_id=chat_id,
-            expiry_seconds=config.access_token_expiry
+            expiry_seconds=config.access_token_expiry,
+            source=SOURCE_TELEGRAM,
         )
         
-        # Generate dynamic link
+        # Generate dynamic link; add backup URL with indent on one line if set
         access_url = f"{config.site_url}/{session.token}"
-        
         response_text = i18n.get_text("bot.access_link_created", link=access_url)
+        if config.site_backup_url:
+            response_text += f"\n   {config.site_backup_url.rstrip('/')}/{session.token}"
         
         keyboard = [
             [InlineKeyboardButton(i18n.get_text("bot.main_menu"), callback_data="main_menu")]
@@ -203,7 +206,7 @@ async def handle_add_access(query, user_id: int, chat_id: int) -> None:
         
         await query.edit_message_text(response_text, reply_markup=reply_markup)
         
-        logger.info(f"Created access session {session.token} for user {user_id}")
+        logger.info(f"Created access session {session.token} for user {user_id} [telegram]")
         
     except Exception as e:
         logger.error(f"Error creating access link for user {user_id}: {e}")
@@ -230,7 +233,9 @@ async def handle_my_access(query, user_id: int) -> None:
         language = get_user_language(user.id, user.language_code)
         i18n.set_language(language)
         
-        active_requests = access_module.access_manager.get_active_requests_for_user(user_id)
+        active_requests = access_module.access_manager.get_active_requests_for_user(
+            user_id, source=SOURCE_TELEGRAM
+        )
         
         if not active_requests:
             response_text = i18n.get_text("bot.no_active_accesses")
@@ -335,7 +340,7 @@ async def handle_close_access(query, user_id: int, access_id: str) -> None:
                                         created=request.created_at.strftime('%H:%M:%S'),
                                         closed=request.closed_at.strftime('%H:%M:%S'))
             
-            logger.info(f"Access {access_id} closed by user {user_id}")
+            logger.info(f"Access {access_id} closed by user {user_id} [telegram]")
         else:
             response_text = i18n.get_text("bot.access_not_found")
         
@@ -398,7 +403,7 @@ async def handle_main_menu(query, first_name: str) -> None:
     ]
     
     # Add admin commands if user is admin
-    if db_manager.is_admin(user.id):
+    if db_manager.is_admin(user.id, SOURCE_TELEGRAM):
         keyboard.append([InlineKeyboardButton(i18n.get_text("bot.manage_users"), callback_data="manage_users")])
     
     # Add language switch button (show opposite language)
@@ -417,13 +422,13 @@ async def handle_manage_users(query, admin_id: int) -> None:
     try:
         user = query.from_user
         
-        if not db_manager.is_admin(admin_id):
+        if not db_manager.is_admin(admin_id, SOURCE_TELEGRAM):
             await query.edit_message_text("❌ Access denied")
             return
-        
+
         language = get_user_language(user.id, user.language_code)
         i18n.set_language(language)
-        
+
         response_text = i18n.get_text("bot.admin_menu")
         
         keyboard = [
@@ -445,13 +450,13 @@ async def handle_add_user_prompt(query, admin_id: int) -> None:
     try:
         user = query.from_user
         
-        if not db_manager.is_admin(admin_id):
+        if not db_manager.is_admin(admin_id, SOURCE_TELEGRAM):
             await query.edit_message_text("❌ Access denied")
             return
-        
+
         language = get_user_language(user.id, user.language_code)
         i18n.set_language(language)
-        
+
         response_text = i18n.get_text("bot.add_user_prompt")
         
         keyboard = [
@@ -470,14 +475,14 @@ async def handle_list_users(query) -> None:
     try:
         user = query.from_user
         
-        if not db_manager.is_admin(user.id):
+        if not db_manager.is_admin(user.id, SOURCE_TELEGRAM):
             await query.edit_message_text("❌ Access denied")
             return
-        
+
         language = get_user_language(user.id, user.language_code)
         i18n.set_language(language)
-        
-        whitelist_users = db_manager.get_whitelist_users()
+
+        whitelist_users = db_manager.get_whitelist_users(SOURCE_TELEGRAM)
         
         if not whitelist_users:
             response_text = i18n.get_text("bot.no_users_in_whitelist")
@@ -522,18 +527,18 @@ async def handle_remove_user(query, admin_id: int, user_to_remove: int) -> None:
     try:
         user = query.from_user
         
-        if not db_manager.is_admin(admin_id):
+        if not db_manager.is_admin(admin_id, SOURCE_TELEGRAM):
             await query.edit_message_text("❌ Access denied")
             return
-        
+
         language = get_user_language(user.id, user.language_code)
         i18n.set_language(language)
-        
-        success = db_manager.remove_from_whitelist(user_to_remove)
-        
+
+        success = db_manager.remove_from_whitelist(SOURCE_TELEGRAM, user_to_remove)
+
         if success:
             response_text = i18n.get_text("bot.user_removed", user_id=user_to_remove)
-            logger.info(f"Admin {admin_id} removed user {user_to_remove} from whitelist")
+            logger.info(f"Admin {admin_id} [telegram] removed user {user_to_remove} from whitelist")
         else:
             response_text = i18n.get_text("bot.user_not_found")
         
@@ -572,7 +577,7 @@ async def handle_set_language(query, user_id: int, language_code: str) -> None:
         ]
         
         # Add admin commands if user is admin
-        if db_manager.is_admin(user_id):
+        if db_manager.is_admin(user_id, SOURCE_TELEGRAM):
             keyboard.append([InlineKeyboardButton(i18n.get_text("bot.manage_users"), callback_data="manage_users")])
         
         # Add language switch button (show opposite language)
@@ -612,7 +617,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     # Check if admin is sending user ID to add to whitelist
-    if db_manager.is_admin(user.id) and text.isdigit():
+    if db_manager.is_admin(user.id, SOURCE_TELEGRAM) and text.isdigit():
         await handle_add_user_to_whitelist(update, int(text))
         return
     
@@ -634,15 +639,16 @@ async def handle_add_user_to_whitelist(update: Update, user_id_to_add: int) -> N
     try:
         # Add user to whitelist
         db_manager.add_to_whitelist(
-            telegram_user_id=user_id_to_add,
-            added_by_admin_id=admin.id,
+            SOURCE_TELEGRAM,
+            user_id_to_add,
+            admin.id,
             username=None,  # Will be updated when user starts bot
             first_name=None,
-            last_name=None
+            last_name=None,
         )
-        
+
         response_text = i18n.get_text("bot.user_added_to_whitelist", user_id=user_id_to_add)
-        logger.info(f"Admin {admin.id} added user {user_id_to_add} to whitelist")
+        logger.info(f"Admin {admin.id} [telegram] added user {user_id_to_add} to whitelist")
         
     except Exception as e:
         logger.error(f"Error adding user {user_id_to_add} to whitelist: {e}")

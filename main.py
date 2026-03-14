@@ -25,10 +25,11 @@ logger = logging.getLogger(__name__)
 
 class FABApplication:
     """Main application class for FAB."""
-    
+
     def __init__(self) -> None:
         """Initialize FAB application."""
         self.bot = None
+        self.vk_bot = None
         self.web_server = None
         self.database = None
         self.executor = ThreadPoolExecutor(max_workers=2)
@@ -89,7 +90,22 @@ class FABApplication:
             logger.info("Starting Telegram bot...")
             self.bot = create_bot()
             await self.bot.start()
-            
+
+            # Start VK bot only if VK_ENABLED=true (optional; failure must not crash the app)
+            try:
+                if config.vk_enabled:
+                    from fab.bot.vk_bot import create_vk_bot
+                    self.vk_bot = create_vk_bot()
+                    if self.vk_bot.start():
+                        logger.info("VK bot started")
+                    else:
+                        self.vk_bot = None
+                else:
+                    self.vk_bot = None
+            except Exception as e:
+                logger.warning("VK bot could not be started (app continues): %s", e)
+                self.vk_bot = None
+
             logger.info("FAB started successfully!")
             logger.info(f"Web server: http://{config.host}:{config.http_port}")
             logger.info(f"Site URL: {config.site_url}")
@@ -113,7 +129,13 @@ class FABApplication:
             if self.bot:
                 logger.info("Stopping Telegram bot...")
                 await self.bot.stop()
-            
+
+            # Stop VK bot
+            if self.vk_bot:
+                logger.info("Stopping VK bot...")
+                self.vk_bot.stop()
+                self.vk_bot = None
+
             # Stop web server
             if self.web_server:
                 logger.info("Stopping web server...")

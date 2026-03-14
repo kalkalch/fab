@@ -45,6 +45,18 @@ class Config:
         self.admin_telegram_ids: set[int] = {
             int(id_str.strip()) for id_str in admin_ids_str.split(',') if id_str.strip()
         }
+
+        # VK Bot Configuration (optional; if not set, VK bot is not started)
+        vk_ids_str = os.getenv("ADMIN_VK_IDS", "")
+        self.admin_vk_ids: set[int] = {
+            int(id_str.strip()) for id_str in vk_ids_str.split(',') if id_str.strip()
+        }
+        self.vk_bot_token: str = os.getenv("VK_BOT_TOKEN", "").strip()
+        self.vk_group_id: int | None = None
+        if self.vk_bot_token:
+            vk_gid = os.getenv("VK_GROUP_ID", "").strip()
+            if vk_gid and vk_gid.isdigit():
+                self.vk_group_id = int(vk_gid)
         
         # Web Server Configuration
         self.http_port: int = int(os.getenv("HTTP_PORT", "8080"))
@@ -99,7 +111,17 @@ class Config:
         self.secret_key: str = os.getenv("SECRET_KEY", self._generate_secret_key())
         self.access_token_expiry: int = int(os.getenv("ACCESS_TOKEN_EXPIRY", "3600"))
         
-        # Proxy Configuration
+        # API proxy (empty = not used; for Telegram/VK API requests)
+        self.telegram_api_proxy: str = os.getenv("TELEGRAM_API_PROXY", "").strip()
+        self.vk_api_proxy: str = os.getenv("VK_API_PROXY", "").strip()
+
+        # Backup site URL for access link (if set, shown with indent on one line under main link)
+        self.site_backup_url: str = os.getenv("SITE_BACKUP_URL", "").strip()
+
+        # VK bot enabled (default off; must be true to start VK bot when token is set)
+        self.vk_enabled: bool = os.getenv("VK_ENABLED", "false").lower() in ("true", "1", "yes")
+
+        # Proxy Configuration (nginx in front of app)
         self.nginx_enabled: bool = os.getenv("NGINX_ENABLED", "false").lower() in ("true", "1", "yes")
         
         # Database Configuration
