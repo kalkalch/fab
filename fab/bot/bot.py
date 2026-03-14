@@ -14,7 +14,7 @@ from telegram.ext import (
     filters
 )
 from telegram.request import HTTPXRequest
-from telegram.error import NetworkError, RetryAfter, TimedOut
+from telegram.error import NetworkError, RetryAfter, TimedOut, BadRequest
 
 from ..config import config
 from .handlers import start_command, help_command, button_callback, handle_text_message
@@ -85,26 +85,33 @@ class FABBot:
     async def _error_handler(self, update, context) -> None:
         """Handle errors that occur during message processing."""
         import traceback
-        
+
         error = context.error
+        err_str = str(error).lower()
+
+        # Callback query too old (Telegram expired it before we answered — e.g. backlog or slow proxy)
+        if "query is too old" in err_str or "query id is invalid" in err_str:
+            logger.warning("Callback query expired (too old or invalid id), skipping: %s", error)
+            return
+
         logger.error(f"Bot error occurred: {error}")
-        
+
         # Handle specific error types
         if isinstance(error, RetryAfter):
             logger.warning(f"Rate limited during runtime. Retry after {error.retry_after}s")
             return
-        
+
         if isinstance(error, NetworkError):
-            if "bad gateway" in str(error).lower() or "502" in str(error):
+            if "bad gateway" in err_str or "502" in err_str:
                 logger.warning("Network error during runtime: Bad Gateway (502)")
             else:
                 logger.error(f"Network error during runtime: {error}")
             return
-        
+
         if isinstance(error, TimedOut):
             logger.warning(f"Timeout during runtime: {error}")
             return
-        
+
         # Log full traceback for unknown errors
         logger.error("Full error traceback:")
         logger.error(''.join(traceback.format_exception(type(error), error, error.__traceback__)))
